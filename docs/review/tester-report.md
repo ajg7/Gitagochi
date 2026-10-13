@@ -1,6 +1,6 @@
 # Tester report
 
-Latest: multi-repo pass at the end of this file (1 BLOCKING bug).
+Latest: final pass (commit 1692984) at the end of this file. 0 BLOCKING bugs; the earlier multi-repo BLOCKING bug is RESOLVED.
 
 Result (round-3 pass, commit e31b79e): 50 integration tests across three passes, 0 ignored, 0 failing. cargo test, clippy -D warnings and fmt --check are clean. No BLOCKING bugs. The earlier BLOCKING branch-switch bug is RESOLVED (see Round-3 pass).
 
@@ -56,3 +56,18 @@ Not testable: the fatal "unparseable repos.json and no CLI paths" exit lives in 
 - A vanished repo mid-run produces no warning or error (head None is treated as success); the user sees nothing until the next rescan.
 - Reset to an older commit then a new commit: the new commit feeds (old baseline still exists in the object db). Consistent with the known branch-switch limitation; not asserted.
 - Windows: stale target lock issue persists; verification used CARGO_TARGET_DIR in the temp dir.
+
+## Final pass (commit 1692984, after round-6 SATISFIED): tests/repo_unavailable.rs
+Status: the previously BLOCKING `temporarily_unavailable_repo_keeps_baseline` (tests/multi_repo_spec.rs:328) is RESOLVED: no longer ignored, passes. Full suite: 0 failed, 0 ignored. cargo clippy --all-targets -- -D warnings and cargo fmt --check are clean. Temp dirs only; the real data dir is untouched. No new BLOCKING bugs.
+
+6 new tests (all pass):
+- warning_appears_for_repo_with_baseline_whose_head_is_unreadable: exactly one "b: repo unavailable" error, healthy repo a still feeds.
+- no_warning_for_empty_repo: no warning over three polls, nothing fed.
+- no_warning_for_freshly_added_repo: repo added after the first sync only baselines, no warning, nothing fed.
+- recovery_does_not_refeed_and_new_commits_feed: repo with 6 commits hidden for 3 polls (warning each poll, nothing fed); on return nothing refed, warning clears, 2 new commits feed.
+- commits_made_while_unavailable_feed_once_on_recovery: the one commit made while away feeds once, then 0.
+- baseline_survives_save_load_while_unavailable: baseline kept across save/load while hidden; recovery refeeds nothing, next commit feeds.
+
+Known limitation (recorded, NOT blocking, per gatekeeper): a repo unreadable at its very first sync is stored initialized with last_seen=None, so on recovery its existing history refeeds (up to 1000 commits). Not asserted by any test. Spec clause (docs/spec.md:34) is met whenever HEAD is readable on first sight.
+
+Not testable: the in-UI display of the warning (ui.rs shows only `errors.first()`, so it can hide other messages); no terminal seam. The spec only says "one-line warning in the UI".
