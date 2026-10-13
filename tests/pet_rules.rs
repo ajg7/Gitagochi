@@ -9,6 +9,7 @@ fn fc(n: u32) -> FedCommit {
         id: format!("id{n}"),
         summary: format!("c{n}"),
         time: 0,
+        repo: String::new(),
     }
 }
 

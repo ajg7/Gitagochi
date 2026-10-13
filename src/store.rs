@@ -1,6 +1,6 @@
-//! Persistence: one JSON file per repo path under the platform data dir.
+//! Persistence: one shared pet save plus legacy per-repo save migration.
 
-use crate::pet::Pet;
+use crate::pet::{Pet, RepoTrack};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -22,7 +22,17 @@ pub fn default_data_dir() -> PathBuf {
         .join("gitagochi")
 }
 
-/// Save file path for a repo, inside `data_dir`.
+/// The shared pet save file, independent of which repos are selected.
+pub fn shared_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("pet.json")
+}
+
+/// The repo selection config file.
+pub fn config_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("repos.json")
+}
+
+/// Legacy per-repo save file path for a repo, inside `data_dir`.
 pub fn save_path(data_dir: &Path, repo: &Path) -> PathBuf {
     let key = repo.to_string_lossy().to_lowercase();
     let name = repo
@@ -34,6 +44,73 @@ pub fn save_path(data_dir: &Path, repo: &Path) -> PathBuf {
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
     data_dir.join(format!("{name}-{:016x}.json", fnv1a(&key)))
+}
+
+fn is_legacy_name(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".json") else {
+        return false;
+    };
+    match stem.rsplit_once('-') {
+        Some((_, h)) => h.len() == 16 && h.bytes().all(|b| b.is_ascii_hexdigit()),
+        None => false,
+    }
+}
+
+/// Adopt the most recently modified legacy per-repo save as the shared pet.
+/// If it belonged to one of `repo_keys`, that repo's tracking is carried over.
+/// Does nothing (returns `None`) if a shared save or its backup exists.
+pub fn migrate_legacy(data_dir: &Path, repo_keys: &[String], now: i64) -> Option<Pet> {
+    let shared = shared_path(data_dir);
+    let mut bak = shared.as_os_str().to_owned();
+    bak.push(".bak");
+    if shared.exists() || Path::new(&bak).exists() {
+        return None;
+    }
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = fs::read_dir(data_dir)
+        .ok()?
+        .flatten()
+        .filter(|e| is_legacy_name(&e.file_name().to_string_lossy()))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    files.sort_by(|a, b| b.cmp(a));
+    for (_, path) in files {
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(v) = serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .filter(serde_json::Value::is_object)
+        else {
+            continue;
+        };
+        let mut v = v;
+        if v.get("last_update").is_none() {
+            v["last_update"] = now.into();
+        }
+        let Ok(mut pet) = serde_json::from_value::<Pet>(v.clone()) else {
+            continue;
+        };
+        if let Some(key) = repo_keys
+            .iter()
+            .find(|k| save_path(data_dir, Path::new(k)) == path)
+        {
+            let mut t = RepoTrack {
+                initialized: v["initialized"].as_bool().unwrap_or(false),
+                last_seen: v["last_seen"].as_str().map(str::to_string),
+                fed_ids: serde_json::from_value(v["fed_ids"].clone()).unwrap_or_default(),
+            };
+            let recent: Vec<String> = pet.recent.iter().rev().map(|r| r.id.clone()).collect();
+            for id in recent {
+                if !t.has_fed(&id) {
+                    t.fed_ids.push(id);
+                }
+            }
+            pet.repos.insert(key.clone(), t);
+        }
+        pet.sanitize();
+        return Some(pet);
+    }
+    None
 }
 
 /// Load the pet. Missing file -> fresh pet. Corrupt file -> fresh pet and the
@@ -105,8 +182,9 @@ mod tests {
             id: "abc".into(),
             summary: "hi".into(),
             time: 1,
+            repo: String::new(),
         }]);
-        pet.last_seen = Some("abc".into());
+        pet.repos.entry("r".into()).or_default().last_seen = Some("abc".into());
         save(&path, &pet).unwrap();
         assert_eq!(load(&path, 99), pet);
     }

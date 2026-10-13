@@ -143,9 +143,10 @@ fn rewritten_history_does_not_error_or_feed() {
     let repo = Repo::open(d.path()).unwrap();
     let mut pet = Pet::new(0);
     sync(&mut pet, &repo, "me@x.com", 0).unwrap();
-    pet.last_seen = Some("0123456789012345678901234567890123456789".into());
+    pet.repos.values_mut().next().unwrap().last_seen =
+        Some("0123456789012345678901234567890123456789".into());
     assert_eq!(sync(&mut pet, &repo, "me@x.com", 1).unwrap(), 0);
-    assert_eq!(pet.last_seen, repo.head());
+    assert_eq!(pet.repos.values().next().unwrap().last_seen, repo.head());
 }
 
 #[test]

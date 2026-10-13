@@ -2,7 +2,7 @@
 //! character stripping, old saves without fed_ids.
 
 use gitagochi::git::Repo;
-use gitagochi::pet::{FedCommit, MAX_FED_IDS, MAX_RECENT, Pet};
+use gitagochi::pet::{MAX_FED_IDS, MAX_RECENT, Pet, RepoTrack};
 use gitagochi::{store, sync};
 use std::fs;
 use std::path::Path;
@@ -58,7 +58,7 @@ fn branch_switch_dedup_survives_save_load_beyond_recent_cap() {
     // App restart between the switches.
     store::save(&save, &pet).unwrap();
     let mut pet = store::load(&save, 3);
-    assert!(pet.fed_ids.len() >= n);
+    assert!(pet.repos.values().next().unwrap().fed_ids.len() >= n);
 
     git(&p, &["checkout", "-q", "feat"]);
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 3).unwrap(), 0);
@@ -88,23 +88,12 @@ fn new_commit_after_switching_back_feeds_only_the_new_one() {
 
 #[test]
 fn fed_ids_are_bounded_and_keep_newest() {
-    let mut pet = Pet::new(0);
+    let mut t = RepoTrack::default();
     let total = MAX_FED_IDS + 50;
-    // Callers pass newest first.
-    let newest_first: Vec<FedCommit> = (0..total)
-        .rev()
-        .map(|i| FedCommit {
-            id: format!("id{i}"),
-            summary: String::new(),
-            time: 0,
-        })
-        .collect();
-    pet.feed(&newest_first);
-    assert_eq!(pet.fed_ids.len(), MAX_FED_IDS);
-    assert_eq!(pet.total_fed, total as u64);
-    assert!(pet.fed_ids.contains(&format!("id{}", total - 1)));
-    assert!(!pet.fed_ids.contains(&"id0".to_string()));
-    assert_eq!(pet.recent.len(), MAX_RECENT);
+    t.record((0..total).map(|i| format!("id{i}")));
+    assert_eq!(t.fed_ids.len(), MAX_FED_IDS);
+    assert!(t.has_fed(&format!("id{}", total - 1)));
+    assert!(!t.has_fed("id0"));
 }
 
 #[test]
@@ -114,48 +103,26 @@ fn bloated_save_fed_ids_trimmed_on_load() {
     let ids: Vec<String> = (0..MAX_FED_IDS + 500)
         .map(|i| format!("\"x{i}\""))
         .collect();
-    fs::write(&path, format!("{{\"fed_ids\":[{}]}}", ids.join(","))).unwrap();
+    fs::write(
+        &path,
+        format!(
+            "{{\"repos\":{{\"k\":{{\"fed_ids\":[{}]}}}}}}",
+            ids.join(",")
+        ),
+    )
+    .unwrap();
     let pet = store::load(&path, 5);
-    assert_eq!(pet.fed_ids.len(), MAX_FED_IDS);
+    assert_eq!(pet.repos["k"].fed_ids.len(), MAX_FED_IDS);
     assert!(!dir.path().join("pet.json.bak").exists());
 }
 
 #[test]
-fn old_save_without_fed_ids_loads_and_dedups_recent() {
-    let dir = tempfile::tempdir().unwrap();
-    let p = dir.path().join("repo");
-    fs::create_dir(&p).unwrap();
-    init(&p);
-    let repo = Repo::open(&p).unwrap();
-    let head = repo.head().unwrap();
-
-    // A round-2 style save: no fed_ids field, HEAD commit listed as recent.
-    let save = dir.path().join("pet.json");
-    let json = format!(
-        r#"{{"hunger":40.0,"health":90.0,"total_fed":1,"last_update":10,
-"initialized":true,"last_seen":null,
-"recent":[{{"id":"{head}","summary":"base","time":1}}]}}"#
-    );
-    fs::write(&save, json).unwrap();
-    let mut pet = store::load(&save, 10);
-    assert!(!dir.path().join("pet.json.bak").exists(), "not corrupt");
-    assert_eq!(pet.total_fed, 1);
-    assert!(pet.fed_ids.contains(&head));
-
-    // The remembered commit is not fed again; a new one is.
-    assert_eq!(sync(&mut pet, &repo, "a@b.c", 11).unwrap(), 0);
-    commit(&p, "new");
-    assert_eq!(sync(&mut pet, &repo, "a@b.c", 12).unwrap(), 1);
-    assert_eq!(pet.total_fed, 2);
-}
-
-#[test]
-fn old_save_minimal_fields_loads_with_empty_fed_ids() {
+fn old_minimal_save_loads_with_no_repos() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("pet.json");
     fs::write(&path, r#"{"hunger":10,"health":50,"last_update":3}"#).unwrap();
     let pet = store::load(&path, 99);
-    assert!(pet.fed_ids.is_empty());
+    assert!(pet.repos.is_empty());
     assert_eq!(pet.last_update, 3);
     assert!(!dir.path().join("pet.json.bak").exists());
 }
@@ -163,20 +130,21 @@ fn old_save_minimal_fields_loads_with_empty_fed_ids() {
 #[test]
 fn fed_ids_round_trip_through_save() {
     let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("repo");
+    fs::create_dir(&p).unwrap();
+    init(&p);
+    let repo = Repo::open(&p).unwrap();
     let path = dir.path().join("pet.json");
     let mut pet = Pet::new(1);
-    let cs: Vec<FedCommit> = (0..30)
-        .map(|i| FedCommit {
-            id: format!("c{i}"),
-            summary: "s".into(),
-            time: i,
-        })
-        .collect();
-    pet.feed(&cs);
+    sync(&mut pet, &repo, "a@b.c", 1).unwrap();
+    for i in 0..30 {
+        commit(&p, &format!("c{i}"));
+    }
+    assert_eq!(sync(&mut pet, &repo, "a@b.c", 2).unwrap(), 30);
     store::save(&path, &pet).unwrap();
     let back = store::load(&path, 2);
-    assert_eq!(back.fed_ids, pet.fed_ids);
-    assert_eq!(back.fed_ids.len(), 30);
+    assert_eq!(back.repos, pet.repos);
+    assert_eq!(back.repos[repo.key()].fed_ids.len(), 30);
 }
 
 #[test]
@@ -187,10 +155,10 @@ fn garbage_baseline_rebaselines_without_feeding_or_error() {
     let repo = Repo::open(p).unwrap();
     let mut pet = Pet::new(0);
     sync(&mut pet, &repo, "a@b.c", 0).unwrap();
-    pet.last_seen = Some("not-a-commit-id".into());
+    pet.repos.values_mut().next().unwrap().last_seen = Some("not-a-commit-id".into());
     commit(p, "next");
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 1).unwrap(), 0);
-    assert_eq!(pet.last_seen, repo.head());
+    assert_eq!(pet.repos.values().next().unwrap().last_seen, repo.head());
     commit(p, "after");
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 2).unwrap(), 1);
 }
@@ -214,7 +182,7 @@ fn pruned_baseline_object_rebaselines_without_feeding() {
     let fed_before = pet.total_fed;
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 2).unwrap(), 0);
     assert_eq!(pet.total_fed, fed_before);
-    assert_eq!(pet.last_seen, repo.head());
+    assert_eq!(pet.repos.values().next().unwrap().last_seen, repo.head());
     commit(p, "after");
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 3).unwrap(), 1);
 }

@@ -45,6 +45,8 @@ pub struct Poll {
 
 pub struct Repo {
     root: PathBuf,
+    key: String,
+    name: String,
 }
 
 fn run(dir: &Path, args: &[&str]) -> Result<std::process::Output, GitError> {
@@ -81,9 +83,30 @@ impl Repo {
             return Err(GitError::Command(err));
         }
         let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        Ok(Repo {
-            root: PathBuf::from(top),
-        })
+        Ok(Repo::from_root(PathBuf::from(top)))
+    }
+
+    /// Build a repo handle without running git (caller saw a `.git` entry).
+    pub fn from_root(root: PathBuf) -> Repo {
+        let key = root
+            .canonicalize()
+            .unwrap_or_else(|_| root.clone())
+            .to_string_lossy()
+            .into_owned();
+        let name = root
+            .file_name()
+            .map(|n| strip_control(&n.to_string_lossy()))
+            .unwrap_or_else(|| "repo".into());
+        Repo { root, key, name }
+    }
+
+    /// Canonical path string identifying this repo in the save file.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn root(&self) -> &Path {
@@ -197,6 +220,7 @@ fn parse_log(text: &str) -> Vec<FedCommit> {
                 id: id.to_string(),
                 summary,
                 time,
+                repo: String::new(),
             })
         })
         .collect()

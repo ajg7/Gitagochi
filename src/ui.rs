@@ -2,7 +2,8 @@
 
 use crate::git::Repo;
 use crate::pet::{Mood, Pet, Stage};
-use crate::{now_unix, store, sync};
+use crate::repos::{self, Resolved};
+use crate::{now_unix, store, sync_all};
 use ratatui::Frame;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
@@ -10,10 +11,11 @@ use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph};
 use std::io;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
+const RESCAN_INTERVAL: Duration = Duration::from_secs(60);
 const FRAME_INTERVAL: Duration = Duration::from_millis(250);
 
 pub fn art(stage: Stage, mood: Mood) -> Vec<&'static str> {
@@ -57,7 +59,7 @@ pub fn art(stage: Stage, mood: Mood) -> Vec<&'static str> {
 
 pub struct View<'a> {
     pub pet: &'a Pet,
-    pub repo_name: &'a str,
+    pub repo_count: usize,
     pub author: &'a str,
     pub message: &'a str,
 }
@@ -78,11 +80,11 @@ pub fn draw(f: &mut Frame, v: &View) {
         .collect();
     lines.push(Line::from(format!("{:?} / {:?}", pet.stage(), pet.mood())).centered());
     f.render_widget(
-        Paragraph::new(lines).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" Gitagochi - {} ", v.repo_name)),
-        ),
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(format!(
+            " Gitagochi - watching {} repo{} ",
+            v.repo_count,
+            if v.repo_count == 1 { "" } else { "s" }
+        ))),
         rows[0],
     );
 
@@ -112,7 +114,11 @@ pub fn draw(f: &mut Frame, v: &View) {
             .iter()
             .map(|c| {
                 let id: String = c.id.chars().take(7).collect();
-                ListItem::new(format!("{id} {}", c.summary))
+                if c.repo.is_empty() {
+                    ListItem::new(format!("{id} {}", c.summary))
+                } else {
+                    ListItem::new(format!("[{}] {id} {}", c.repo, c.summary))
+                }
             })
             .collect()
     };
@@ -129,34 +135,51 @@ pub fn draw(f: &mut Frame, v: &View) {
     f.render_widget(Paragraph::new(hint), rows[3]);
 }
 
+/// Inputs for the interactive session.
+pub struct Session {
+    pub paths: Vec<PathBuf>,
+    pub author: String,
+    pub save_file: PathBuf,
+    pub initial_warning: Option<String>,
+}
+
 /// Run the interactive loop. Terminal is restored on return and on panic
 /// (`ratatui::init` installs a panic hook that restores it).
-pub fn run(repo: &Repo, author: &str, save_file: &Path, mut pet: Pet) -> io::Result<()> {
+pub fn run(session: Session, resolved: Resolved, mut pet: Pet) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, repo, author, save_file, &mut pet);
+    let result = event_loop(&mut terminal, &session, resolved, &mut pet);
     ratatui::restore();
     result
 }
 
 fn event_loop(
     terminal: &mut ratatui::DefaultTerminal,
-    repo: &Repo,
-    author: &str,
-    save_file: &Path,
+    session: &Session,
+    resolved: Resolved,
     pet: &mut Pet,
 ) -> io::Result<()> {
-    let repo_name = repo
-        .root()
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "repo".into());
+    let author = session.author.as_str();
+    let save_file = session.save_file.as_path();
+    let mut repos = resolved.repos;
+    let mut warnings = resolved.warnings;
+    warnings.extend(session.initial_warning.clone());
+    let mut last_scan = Instant::now();
     let mut message = String::new();
     let mut last_poll: Option<Instant> = None;
+    let mut force_scan = false;
     let mut dirty = false;
     loop {
         let due = last_poll.is_none_or(|t| t.elapsed() >= POLL_INTERVAL);
         if due {
-            refresh(pet, repo, author, &mut message, &mut dirty);
+            if force_scan || last_scan.elapsed() >= RESCAN_INTERVAL {
+                let r = repos::resolve(&session.paths);
+                repos = r.repos;
+                warnings = r.warnings;
+                last_scan = Instant::now();
+                force_scan = false;
+            }
+            refresh(pet, &repos, author, &warnings, &mut message);
+            dirty = true;
             last_poll = Some(Instant::now());
         } else {
             pet.tick(now_unix());
@@ -172,7 +195,7 @@ fn event_loop(
                 f,
                 &View {
                     pet,
-                    repo_name: &repo_name,
+                    repo_count: repos.len(),
                     author,
                     message: &message,
                 },
@@ -185,7 +208,10 @@ fn event_loop(
             match k.code {
                 KeyCode::Char('q') | KeyCode::Esc => break,
                 KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => break,
-                KeyCode::Char('r') => last_poll = None,
+                KeyCode::Char('r') => {
+                    last_poll = None;
+                    force_scan = true;
+                }
                 _ => {}
             }
         }
@@ -205,21 +231,18 @@ fn short_error(e: &str) -> String {
     }
 }
 
-fn refresh(pet: &mut Pet, repo: &Repo, author: &str, message: &mut String, dirty: &mut bool) {
-    match sync(pet, repo, author, now_unix()) {
-        Ok(n) => {
-            *message = if n > 0 {
-                format!("fed {n} new commit(s)!")
-            } else {
-                String::new()
-            };
-            *dirty = true;
-        }
-        Err(e) => {
-            *message = short_error(&e.to_string());
-            *dirty = true;
-        }
+fn refresh(pet: &mut Pet, repos: &[Repo], author: &str, warnings: &[String], message: &mut String) {
+    let report = sync_all(pet, repos, author, now_unix());
+    let mut parts = Vec::new();
+    if report.fed > 0 {
+        parts.push(format!("fed {} new commit(s)!", report.fed));
     }
+    if let Some(e) = report.errors.first() {
+        parts.push(short_error(e));
+    } else if let Some(w) = warnings.first() {
+        parts.push(short_error(w).replacen("sync error", "warning", 1));
+    }
+    *message = parts.join("  ");
 }
 
 #[cfg(test)]

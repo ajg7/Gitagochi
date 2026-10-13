@@ -80,15 +80,18 @@ fn round_trip_preserves_state() {
         id: "a".into(),
         summary: "unicode \u{2713}".into(),
         time: 3,
+        repo: "r".into(),
     }]);
-    p.initialized = true;
-    p.last_seen = Some("a".into());
+    let t = p.repos.entry("k".into()).or_default();
+    t.initialized = true;
+    t.last_seen = Some("a".into());
+    t.fed_ids.push("a".into());
     store::save(&f, &p).unwrap();
     assert_eq!(store::load(&f, 100), p);
 }
 
 #[test]
-fn one_file_per_repo_path_in_data_dir() {
+fn legacy_save_path_per_repo_in_data_dir() {
     let d = Path::new("data");
     let a = store::save_path(d, Path::new("/x/repo"));
     let b = store::save_path(d, Path::new("/y/repo"));

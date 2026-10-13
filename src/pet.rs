@@ -1,6 +1,7 @@
 //! Pure pet state and rules. No terminal, git or filesystem I/O.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Hunger gained per second (0..=100 scale): empty to starving in ~8 hours.
 pub const HUNGER_PER_SEC: f64 = 100.0 / (8.0 * 3600.0);
@@ -22,7 +23,7 @@ pub const BABY_AT: u64 = 3;
 pub const ADULT_AT: u64 = 20;
 /// How many recently fed commits are remembered.
 pub const MAX_RECENT: usize = 20;
-/// How many fed commit ids are remembered to avoid feeding twice.
+/// How many fed commit ids are remembered per repo to avoid feeding twice.
 pub const MAX_FED_IDS: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +31,39 @@ pub struct FedCommit {
     pub id: String,
     pub summary: String,
     pub time: i64,
+    /// Short name of the repo the commit came from (empty in old saves).
+    #[serde(default)]
+    pub repo: String,
+}
+
+/// Per-repo tracking: baseline HEAD and ids of commits already fed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RepoTrack {
+    /// True once the repo has been baselined.
+    pub initialized: bool,
+    /// HEAD commit id at the last check; `None` for an empty repo.
+    pub last_seen: Option<String>,
+    /// Ids of every fed commit (oldest first, bounded by `MAX_FED_IDS`).
+    pub fed_ids: Vec<String>,
+}
+
+impl RepoTrack {
+    pub fn has_fed(&self, id: &str) -> bool {
+        self.fed_ids.iter().any(|x| x == id)
+    }
+
+    pub fn record(&mut self, ids: impl IntoIterator<Item = String>) {
+        self.fed_ids.extend(ids);
+        self.trim();
+    }
+
+    pub fn trim(&mut self) {
+        if self.fed_ids.len() > MAX_FED_IDS {
+            let extra = self.fed_ids.len() - MAX_FED_IDS;
+            self.fed_ids.drain(..extra);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,14 +89,10 @@ pub struct Pet {
     pub total_fed: u64,
     /// Unix seconds of the last time decay was applied.
     pub last_update: i64,
-    /// True once the repo has been baselined (first run done).
-    pub initialized: bool,
-    /// HEAD commit id at the last check; `None` for an empty repo.
-    pub last_seen: Option<String>,
     /// Most recent fed commits, newest first.
     pub recent: Vec<FedCommit>,
-    /// Ids of every fed commit (oldest first, bounded by `MAX_FED_IDS`).
-    pub fed_ids: Vec<String>,
+    /// Tracking per repo, keyed by canonical repo path.
+    pub repos: BTreeMap<String, RepoTrack>,
 }
 
 impl Default for Pet {
@@ -78,10 +108,8 @@ impl Pet {
             health: 100.0,
             total_fed: 0,
             last_update: now,
-            initialized: false,
-            last_seen: None,
             recent: Vec::new(),
-            fed_ids: Vec::new(),
+            repos: BTreeMap::new(),
         }
     }
 
@@ -91,23 +119,9 @@ impl Pet {
         self.hunger = fix(self.hunger);
         self.health = fix(self.health);
         self.recent.truncate(MAX_RECENT);
-        for r in self.recent.iter().rev() {
-            if !self.fed_ids.contains(&r.id) {
-                self.fed_ids.push(r.id.clone());
-            }
+        for t in self.repos.values_mut() {
+            t.trim();
         }
-        self.trim_fed_ids();
-    }
-
-    fn trim_fed_ids(&mut self) {
-        if self.fed_ids.len() > MAX_FED_IDS {
-            let extra = self.fed_ids.len() - MAX_FED_IDS;
-            self.fed_ids.drain(..extra);
-        }
-    }
-
-    pub fn has_fed(&self, id: &str) -> bool {
-        self.fed_ids.iter().any(|x| x == id)
     }
 
     /// Apply time-based decay up to `now` (unix seconds). If the clock went
@@ -140,10 +154,8 @@ impl Pet {
             self.health = (self.health + HEALTH_PER_COMMIT).min(100.0);
             self.total_fed = self.total_fed.saturating_add(1);
             self.recent.insert(0, c.clone());
-            self.fed_ids.push(c.id.clone());
         }
         self.recent.truncate(MAX_RECENT);
-        self.trim_fed_ids();
     }
 
     pub fn stage(&self) -> Stage {
@@ -178,6 +190,7 @@ mod tests {
             id: format!("id{n}"),
             summary: format!("commit {n}"),
             time: 0,
+            repo: String::new(),
         }
     }
 

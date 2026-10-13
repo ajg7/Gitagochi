@@ -76,10 +76,11 @@ fn vanished_baseline_feeds_nothing_and_recovers() {
     let repo = Repo::open(p).unwrap();
     let mut pet = Pet::new(0);
     sync(&mut pet, &repo, "a@b.c", 0).unwrap();
-    pet.last_seen = Some("0123456789abcdef0123456789abcdef01234567".into());
+    pet.repos.values_mut().next().unwrap().last_seen =
+        Some("0123456789abcdef0123456789abcdef01234567".into());
     git(p, &["commit", "-q", "--allow-empty", "-m", "x"]);
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 1).unwrap(), 0);
-    assert_eq!(pet.last_seen, repo.head());
+    assert_eq!(pet.repos.values().next().unwrap().last_seen, repo.head());
     git(p, &["commit", "-q", "--allow-empty", "-m", "y"]);
     assert_eq!(sync(&mut pet, &repo, "a@b.c", 2).unwrap(), 1);
 }
@@ -129,7 +130,7 @@ fn load_empty_object_uses_defaults_and_now() {
     let pet = store::load(&path, 1234);
     assert_eq!(pet.last_update, 1234);
     assert_eq!(pet.total_fed, 0);
-    assert!(!pet.initialized);
+    assert!(pet.repos.is_empty());
     assert!(pet.hunger.is_finite() && (0.0..=100.0).contains(&pet.hunger));
     assert!((0.0..=100.0).contains(&pet.health));
 }
