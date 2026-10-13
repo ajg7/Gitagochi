@@ -120,7 +120,13 @@ pub fn effective_paths(cli: Vec<PathBuf>, config: &repos::Config) -> Vec<PathBuf
 /// Entry point used by `main`. Errors are user-facing messages.
 pub fn run(args: Args) -> Result<(), String> {
     let data_dir = store::default_data_dir();
-    let (config, config_warning) = repos::load_config(&store::config_path(&data_dir));
+    let config_file = store::config_path(&data_dir);
+    let (config, config_warning) = repos::load_config(&config_file);
+    if args.paths.is_empty()
+        && let Some(w) = &config_warning
+    {
+        return Err(format!("{}: {w}", config_file.display()));
+    }
     let author_arg = args.author.or_else(|| config.author.clone());
     let paths = effective_paths(args.paths, &config);
     let resolved = repos::resolve(&paths);

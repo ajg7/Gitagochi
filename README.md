@@ -33,8 +33,9 @@ cargo run -- [PATH ...] [--author EMAIL]
 ```
 Each PATH is a git repo or a parent folder holding repos. A parent folder is scanned up to 3 levels deep (it stops at a repo, skips hidden folders, `node_modules`, `target`, `venv`, `.venv` and `__pycache__`, and does not follow symlinks) and is re-scanned about once a minute, so new repos are picked up. With no PATH, the repos come from `repos.json` in the data dir (`%APPDATA%\gitagochi` on Windows), and with neither the current directory is used:
 ```
-{"repos": ["C:\Users\me\Tech & Coding", "C:\Users\me\Game Development"], "author": "you@example.com"}
+{"repos": ["C:\\Users\\me\\Tech & Coding", "C:\\Users\\me\\Game Development"], "author": "you@example.com"}
 ```
+In JSON, Windows backslashes must be doubled (or use forward slashes). If `repos.json` cannot be parsed and no PATH is given, the app exits with an error naming the file and the line and column.
 PATHs on the command line override the config's `repos`, and `--author` overrides its `author` (default: `git config user.email` of the first repo that has one).
 
 All watched repos feed one shared pet, saved in `pet.json` in the data dir. A repo seen for the first time only records its current HEAD, so existing history does not feed the pet. Missing or non-repo paths show a one-line warning and the rest keep feeding; it is an error only if no repo can be found. An old single-repo save is adopted as the shared pet on first run.

@@ -175,6 +175,7 @@ fn event_loop(
                 let r = repos::resolve(&session.paths);
                 repos = r.repos;
                 warnings = r.warnings;
+                warnings.extend(session.initial_warning.clone());
                 last_scan = Instant::now();
                 force_scan = false;
             }

@@ -27,6 +27,7 @@ pub struct Config {
 }
 
 pub fn parse_config(text: &str) -> Result<Config, String> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     serde_json::from_str(text).map_err(|e| format!("invalid repos.json: {e}"))
 }
 
@@ -156,6 +157,17 @@ mod tests {
         assert_eq!(c.author.as_deref(), Some("a@b"));
         assert_eq!(parse_config("{}").unwrap(), Config::default());
         assert!(parse_config("[1").is_err());
+    }
+
+    #[test]
+    fn single_backslash_path_is_an_error() {
+        assert!(parse_config(r#"{"repos":["C:\Users\me"]}"#).is_err());
+    }
+
+    #[test]
+    fn bom_prefixed_config_parses() {
+        let c = parse_config("\u{feff}{\"author\":\"a@b\"}").unwrap();
+        assert_eq!(c.author.as_deref(), Some("a@b"));
     }
 
     #[test]
