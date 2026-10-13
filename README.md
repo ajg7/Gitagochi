@@ -1,6 +1,20 @@
 # Gitagochi
 A terminal based tomagachi-like game that feeds on git commits
 
+## Meet your Gitagochi
+Your pet grows as it eats your commits: egg, then baby, then adult. Here it is in a happy mood at each stage.
+
+```
+   ___       .---.     /\___/\
+  / . \     ( ^.^ )   ( ^   ^ )
+ |  .  |     ( v )     (  w  )
+  \___/      '---'     /|   |\
+                        '---'
+  Egg        Baby        Adult
+```
+
+It also gets hungry, sleepy or content depending on how recently you committed.
+
 ## About this project
 This was my first experiment in AI agentic workflows, such as an orchestrator-workers setup combined with an evaluator-optimizer loop. A main Claude Code session acted as the orchestrator and wrote no code itself. It handed work to specialised subagents (coder, reviewer, adversary, gatekeeper and tester), defined in `.claude/agents/`. The agents passed state to each other through files in `docs/review/` rather than chat.
 
