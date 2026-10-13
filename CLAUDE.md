@@ -8,7 +8,7 @@ Gitagochi is a terminal-based Tamagotchi-like game whose pet "feeds" on git comm
 
 ## Status
 
-The Cargo project is scaffolded (edition 2024, still the default hello-world `main.rs`). The requirements live in `docs/spec.md`; reviewers judge the code against it. Update this file as the code lands.
+Round 1 implementation has landed (edition 2024). The requirements live in `docs/spec.md`; reviewers judge the code against it. Usage: `gitagochi [PATH] [--author EMAIL]`; keys `q`/Esc/Ctrl-C quit, `r` refresh. The first run on a repo only baselines HEAD (existing history does not feed the pet); later commits by the author feed it.
 
 ## Commands
 
@@ -41,13 +41,14 @@ Definition of satisfied: the app builds and runs, `cargo clippy --all-targets --
 
 If the verdict is REVISE, start the next round with only the verdict's required items passed to the coder. If round 3 still ends in REVISE (`ESCALATE: yes`), stop and give the user the open blocking items instead of looping. Pass state between agents through the files in `docs/review/`, not through chat, and don't share the coder's reasoning with the reviewers.
 
-## Planned architecture
+## Architecture
 
-Intended to follow standard Rust terminal-app conventions (not yet implemented):
+Crates: `ratatui` (re-exports `crossterm`), `serde`/`serde_json`, `dirs`; dev: `tempfile`. Git is read by shelling out to the `git` binary (no `git2`).
 
-- `src/main.rs` stays thin: parse args, set up/restore the terminal, call into the library crate.
-- `src/lib.rs` holds the logic so it is testable from `tests/`.
-- Separate modules for: git commit ingestion (read history, e.g. via `git2` or shelling out to `git`), pet state/rules (pure logic, no I/O), persistence (state file under the platform data dir), and the TUI (e.g. `ratatui` + `crossterm`, event loop that renders from state).
-- Keep pet logic free of terminal and git I/O so it can be unit-tested with `#[cfg(test)]` modules; use `tests/` for integration tests.
-
-Treat the crate choices above as defaults to confirm, not decisions already made.
+- `src/main.rs`: thin; parses args, prints errors, sets exit code.
+- `src/lib.rs`: `sync()` (decay then feed new commits), arg parsing, `run()` wiring.
+- `src/pet.rs`: pure pet state and rules (hunger, health, stage, mood, clock-safe `tick`). No I/O.
+- `src/git.rs`: `Repo` (open, head, default author, `commits_since` using `git log` on `last..HEAD`).
+- `src/store.rs`: JSON save per repo path under the platform data dir; corrupt files moved to `.bak`; atomic writes.
+- `src/ui.rs`: ratatui rendering and event loop; terminal restored via `ratatui::restore` and the panic hook from `ratatui::init`.
+- `tests/git_sync.rs`: integration tests against real temporary git repos.
