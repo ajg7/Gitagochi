@@ -8,7 +8,7 @@ Gitagochi is a terminal-based Tamagotchi-like game whose pet "feeds" on git comm
 
 ## Status
 
-Round 1 implementation has landed (edition 2024). The requirements live in `docs/spec.md`; reviewers judge the code against it. Usage: `gitagochi [PATH] [--author EMAIL]`; keys `q`/Esc/Ctrl-C quit, `r` refresh. The first run on a repo only baselines HEAD (existing history does not feed the pet); later commits by the author feed it.
+Round 1 implementation has landed (edition 2024). The requirements live in `docs/spec.md`; reviewers judge the code against it. Usage: `gitagochi [PATH ...] [--author EMAIL]` (paths may be repos or parent folders; else `repos.json` in the data dir); keys `q`/Esc/Ctrl-C quit, `r` refresh and re-scan. One shared pet is fed by all watched repos. A repo seen for the first time only baselines HEAD (existing history does not feed the pet); later commits by the author feed it.
 
 ## Commands
 
@@ -46,9 +46,10 @@ If the verdict is REVISE, start the next round with only the verdict's required 
 Crates: `ratatui` (re-exports `crossterm`), `serde`/`serde_json`, `dirs`; dev: `tempfile`. Git is read by shelling out to the `git` binary (no `git2`).
 
 - `src/main.rs`: thin; parses args, prints errors, sets exit code.
-- `src/lib.rs`: `sync()` (decay then feed new commits), arg parsing, `run()` wiring.
-- `src/pet.rs`: pure pet state and rules (hunger, health, stage, mood, clock-safe `tick`). No I/O.
-- `src/git.rs`: `Repo` (open, head, default author, `commits_since` using `git log` on `last..HEAD`).
-- `src/store.rs`: JSON save per repo path under the platform data dir; corrupt files moved to `.bak`; atomic writes.
-- `src/ui.rs`: ratatui rendering and event loop; terminal restored via `ratatui::restore` and the panic hook from `ratatui::init`.
-- `tests/git_sync.rs`: integration tests against real temporary git repos.
+- `src/lib.rs`: `sync()` (one repo), `sync_repo`, `sync_all` (decay once, feed from every repo), arg parsing, `run()` wiring.
+- `src/pet.rs`: pure pet state and rules (hunger, health, stage, mood, clock-safe `tick`). No I/O. Also holds per-repo tracking: `repos: BTreeMap<canonical path, RepoTrack>` (baseline HEAD, fed-commit ids).
+- `src/git.rs`: `Repo` (open, `from_root`, canonical `key()`, `name()`, head, default author, `commits_since` using `git log` on `last..HEAD`).
+- `src/repos.rs`: `repos.json` config parsing and `resolve()` of paths into repos: a repo, a parent folder (scanned 3 levels deep, stops at repos, skips hidden dirs and node_modules/target/venv/.venv/__pycache__, no symlinks), or a folder inside a repo.
+- `src/store.rs`: one shared save `pet.json` plus `repos.json` in the platform data dir; `migrate_legacy` adopts the newest old per-repo save (`<name>-<hash>.json`); corrupt files moved to `.bak`; atomic writes.
+- `src/ui.rs`: ratatui rendering and event loop (poll 10s, re-scan repos every 60s or on `r`); terminal restored via `ratatui::restore` and the panic hook from `ratatui::init`.
+- `tests/`: integration tests against real temporary git repos; `multi_repo.rs` covers multi-repo feeding, scanning and migration.
