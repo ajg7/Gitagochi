@@ -45,7 +45,9 @@ pub fn sync_repo(pet: &mut Pet, repo: &Repo, author: &str) -> Result<usize, GitE
             c
         })
         .collect();
-    track.last_seen = poll.head;
+    if poll.head.is_some() {
+        track.last_seen = poll.head;
+    }
     track.record(fresh.iter().rev().map(|c| c.id.clone()));
     pet.feed(&fresh);
     Ok(fresh.len())
@@ -64,7 +66,18 @@ pub fn sync_all(pet: &mut Pet, repos: &[Repo], author: &str, now: i64) -> SyncRe
     let mut report = SyncReport::default();
     for r in repos {
         match sync_repo(pet, r, author) {
-            Ok(n) => report.fed += n,
+            Ok(n) => {
+                report.fed += n;
+                let had_baseline = pet
+                    .repos
+                    .get(r.key())
+                    .is_some_and(|t| t.last_seen.is_some());
+                if had_baseline && r.head().is_none() {
+                    report
+                        .errors
+                        .push(format!("{}: repo unavailable", r.name()));
+                }
+            }
             Err(e) => report.errors.push(format!("{}: {e}", r.name())),
         }
     }

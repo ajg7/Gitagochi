@@ -325,7 +325,6 @@ fn no_resolvable_repo_gives_empty_result() {
 }
 
 #[test]
-#[ignore = "BUG: temporarily unreadable repo loses its baseline (last_seen=None) and refeeds history on return"]
 fn temporarily_unavailable_repo_keeps_baseline() {
     let d = tempfile::tempdir().unwrap();
     let (a, b) = (d.path().join("a"), d.path().join("b"));
