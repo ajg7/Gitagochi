@@ -29,9 +29,14 @@ pub fn sync(pet: &mut Pet, repo: &Repo, author: &str, now: i64) -> Result<usize,
         return Ok(0);
     }
     let poll = repo.commits_since(pet.last_seen.as_deref(), author)?;
-    pet.feed(&poll.new_commits);
+    let fresh: Vec<_> = poll
+        .new_commits
+        .into_iter()
+        .filter(|c| !pet.recent.iter().any(|r| r.id == c.id))
+        .collect();
+    pet.feed(&fresh);
     pet.last_seen = poll.head;
-    Ok(poll.new_commits.len())
+    Ok(fresh.len())
 }
 
 /// Command-line options.

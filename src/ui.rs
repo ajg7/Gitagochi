@@ -110,7 +110,10 @@ pub fn draw(f: &mut Frame, v: &View) {
     } else {
         pet.recent
             .iter()
-            .map(|c| ListItem::new(format!("{} {}", &c.id[..c.id.len().min(7)], c.summary)))
+            .map(|c| {
+                let id: String = c.id.chars().take(7).collect();
+                ListItem::new(format!("{id} {}", c.summary))
+            })
             .collect()
     };
     f.render_widget(

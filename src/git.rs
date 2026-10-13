@@ -7,6 +7,8 @@ use std::process::Command;
 
 /// Upper bound on commits read in one poll, to bound work on huge histories.
 const MAX_NEW_COMMITS: usize = 1000;
+/// Commit summaries are truncated to this many characters on ingest.
+const MAX_SUMMARY_CHARS: usize = 200;
 
 #[derive(Debug)]
 pub enum GitError {
@@ -72,7 +74,11 @@ impl Repo {
         }
         let out = run(path, &["rev-parse", "--show-toplevel"])?;
         if !out.status.success() {
-            return Err(GitError::NotARepo(path.to_path_buf()));
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            if err.is_empty() || err.contains("not a git repository") {
+                return Err(GitError::NotARepo(path.to_path_buf()));
+            }
+            return Err(GitError::Command(err));
         }
         let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
         Ok(Repo {
@@ -103,6 +109,7 @@ impl Repo {
     /// Commits by `author_email` reachable from HEAD but not from `since`.
     /// With `since == None`, all commits reachable from HEAD (bounded).
     /// If `since` is no longer valid (history rewritten), returns no commits.
+    /// Other git failures are returned as errors.
     pub fn commits_since(&self, since: Option<&str>, author_email: &str) -> Result<Poll, GitError> {
         let head = self.head();
         if head.is_none() || head.as_deref() == since {
@@ -110,6 +117,16 @@ impl Repo {
                 head,
                 new_commits: Vec::new(),
             });
+        }
+        if let Some(s) = since {
+            let check = format!("{s}^{{commit}}");
+            let ok = run(&self.root, &["cat-file", "-e", &check])?;
+            if !ok.status.success() {
+                return Ok(Poll {
+                    head,
+                    new_commits: Vec::new(),
+                });
+            }
         }
         let range = match since {
             Some(s) => format!("{s}..HEAD"),
@@ -131,11 +148,9 @@ impl Repo {
             ],
         )?;
         if !out.status.success() {
-            // Baseline commit vanished (rebase/gc): re-baseline without feeding.
-            return Ok(Poll {
-                head,
-                new_commits: Vec::new(),
-            });
+            return Err(GitError::Command(
+                String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            ));
         }
         Ok(Poll {
             head,
@@ -150,7 +165,12 @@ fn parse_log(text: &str) -> Vec<FedCommit> {
             let mut it = line.splitn(3, '\x1f');
             let id = it.next()?.trim();
             let time = it.next()?.trim().parse().ok()?;
-            let summary = it.next().unwrap_or("").to_string();
+            let summary: String = it
+                .next()
+                .unwrap_or("")
+                .chars()
+                .take(MAX_SUMMARY_CHARS)
+                .collect();
             (!id.is_empty()).then(|| FedCommit {
                 id: id.to_string(),
                 summary,
@@ -163,6 +183,16 @@ fn parse_log(text: &str) -> Vec<FedCommit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncates_long_summaries() {
+        let long = "é".repeat(500);
+        let v = parse_log(&format!(
+            "abc1{long}
+"
+        ));
+        assert_eq!(v[0].summary.chars().count(), MAX_SUMMARY_CHARS);
+    }
 
     #[test]
     fn parses_log_lines() {

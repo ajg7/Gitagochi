@@ -46,6 +46,7 @@ pub enum Mood {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Pet {
     pub hunger: f64,
     pub health: f64,
@@ -58,6 +59,12 @@ pub struct Pet {
     pub last_seen: Option<String>,
     /// Most recent fed commits, newest first.
     pub recent: Vec<FedCommit>,
+}
+
+impl Default for Pet {
+    fn default() -> Self {
+        Pet::new(0)
+    }
 }
 
 impl Pet {
@@ -148,6 +155,23 @@ mod tests {
             summary: format!("commit {n}"),
             time: 0,
         }
+    }
+
+    #[test]
+    fn mood_thresholds() {
+        let mut p = Pet::new(0);
+        p.hunger = 10.0;
+        p.health = 100.0;
+        assert_eq!(p.mood(), Mood::Happy);
+        p.hunger = 40.0;
+        assert_eq!(p.mood(), Mood::Content);
+        p.hunger = 60.0;
+        assert_eq!(p.mood(), Mood::Hungry);
+        p.hunger = 90.0;
+        assert_eq!(p.mood(), Mood::Sleepy);
+        p.hunger = 10.0;
+        p.health = 25.0;
+        assert_eq!(p.mood(), Mood::Sleepy);
     }
 
     #[test]

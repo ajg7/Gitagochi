@@ -47,7 +47,18 @@ pub fn load(path: &Path, now: i64) -> Pet {
             return Pet::new(now);
         }
     };
-    match serde_json::from_str::<Pet>(&text) {
+    let parsed = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .filter(serde_json::Value::is_object)
+        .map(|mut v| {
+            if v.get("last_update").is_none() {
+                v["last_update"] = now.into();
+            }
+            v
+        })
+        .and_then(|v| serde_json::from_value::<Pet>(v).ok())
+        .ok_or(());
+    match parsed {
         Ok(mut pet) => {
             pet.sanitize();
             pet
