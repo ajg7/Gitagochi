@@ -29,10 +29,11 @@ pub fn sync(pet: &mut Pet, repo: &Repo, author: &str, now: i64) -> Result<usize,
         return Ok(0);
     }
     let poll = repo.commits_since(pet.last_seen.as_deref(), author)?;
+    let known: std::collections::HashSet<&str> = pet.fed_ids.iter().map(String::as_str).collect();
     let fresh: Vec<_> = poll
         .new_commits
         .into_iter()
-        .filter(|c| !pet.recent.iter().any(|r| r.id == c.id))
+        .filter(|c| !known.contains(c.id.as_str()))
         .collect();
     pet.feed(&fresh);
     pet.last_seen = poll.head;

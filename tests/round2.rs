@@ -31,7 +31,6 @@ fn init(p: &Path) {
 }
 
 #[test]
-#[ignore = "BUG: branch-switch dedup bounded by MAX_RECENT (20); refeeds older commits"]
 fn switching_to_branch_with_many_fed_commits_does_not_refeed() {
     let d = tempfile::tempdir().unwrap();
     let p = d.path();

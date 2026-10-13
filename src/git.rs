@@ -120,8 +120,12 @@ impl Repo {
         }
         if let Some(s) = since {
             let check = format!("{s}^{{commit}}");
-            let ok = run(&self.root, &["cat-file", "-e", &check])?;
+            let ok = run(&self.root, &["rev-parse", "--verify", "--quiet", &check])?;
             if !ok.status.success() {
+                let err = String::from_utf8_lossy(&ok.stderr).trim().to_string();
+                if !err.is_empty() {
+                    return Err(GitError::Command(err));
+                }
                 return Ok(Poll {
                     head,
                     new_commits: Vec::new(),
@@ -159,15 +163,33 @@ impl Repo {
     }
 }
 
+fn strip_control(s: &str) -> String {
+    let mut out = String::new();
+    let mut it = s.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '' {
+            if it.peek() == Some(&'[') {
+                it.next();
+                for n in it.by_ref() {
+                    if ('@'..='~').contains(&n) {
+                        break;
+                    }
+                }
+            }
+        } else if !c.is_control() {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn parse_log(text: &str) -> Vec<FedCommit> {
     text.lines()
         .filter_map(|line| {
             let mut it = line.splitn(3, '\x1f');
             let id = it.next()?.trim();
             let time = it.next()?.trim().parse().ok()?;
-            let summary: String = it
-                .next()
-                .unwrap_or("")
+            let summary: String = strip_control(it.next().unwrap_or(""))
                 .chars()
                 .take(MAX_SUMMARY_CHARS)
                 .collect();
@@ -192,6 +214,23 @@ mod tests {
 "
         ));
         assert_eq!(v[0].summary.chars().count(), MAX_SUMMARY_CHARS);
+    }
+
+    #[test]
+    fn strips_control_and_ansi() {
+        let raw = [
+            "abc",
+            "\u{1f}",
+            "1",
+            "\u{1f}",
+            "\u{1b}[31mred\u{1b}[0m",
+            "\u{7} t",
+            "\t",
+            "x",
+        ]
+        .concat();
+        let v = parse_log(&raw);
+        assert_eq!(v[0].summary, "red tx");
     }
 
     #[test]

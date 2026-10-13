@@ -22,6 +22,8 @@ pub const BABY_AT: u64 = 3;
 pub const ADULT_AT: u64 = 20;
 /// How many recently fed commits are remembered.
 pub const MAX_RECENT: usize = 20;
+/// How many fed commit ids are remembered to avoid feeding twice.
+pub const MAX_FED_IDS: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FedCommit {
@@ -59,6 +61,8 @@ pub struct Pet {
     pub last_seen: Option<String>,
     /// Most recent fed commits, newest first.
     pub recent: Vec<FedCommit>,
+    /// Ids of every fed commit (oldest first, bounded by `MAX_FED_IDS`).
+    pub fed_ids: Vec<String>,
 }
 
 impl Default for Pet {
@@ -77,6 +81,7 @@ impl Pet {
             initialized: false,
             last_seen: None,
             recent: Vec::new(),
+            fed_ids: Vec::new(),
         }
     }
 
@@ -86,6 +91,23 @@ impl Pet {
         self.hunger = fix(self.hunger);
         self.health = fix(self.health);
         self.recent.truncate(MAX_RECENT);
+        for r in self.recent.iter().rev() {
+            if !self.fed_ids.contains(&r.id) {
+                self.fed_ids.push(r.id.clone());
+            }
+        }
+        self.trim_fed_ids();
+    }
+
+    fn trim_fed_ids(&mut self) {
+        if self.fed_ids.len() > MAX_FED_IDS {
+            let extra = self.fed_ids.len() - MAX_FED_IDS;
+            self.fed_ids.drain(..extra);
+        }
+    }
+
+    pub fn has_fed(&self, id: &str) -> bool {
+        self.fed_ids.iter().any(|x| x == id)
     }
 
     /// Apply time-based decay up to `now` (unix seconds). If the clock went
@@ -118,8 +140,10 @@ impl Pet {
             self.health = (self.health + HEALTH_PER_COMMIT).min(100.0);
             self.total_fed = self.total_fed.saturating_add(1);
             self.recent.insert(0, c.clone());
+            self.fed_ids.push(c.id.clone());
         }
         self.recent.truncate(MAX_RECENT);
+        self.trim_fed_ids();
     }
 
     pub fn stage(&self) -> Stage {

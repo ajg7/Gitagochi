@@ -194,6 +194,17 @@ fn event_loop(
     Ok(())
 }
 
+fn short_error(e: &str) -> String {
+    let first = e.lines().find(|l| !l.trim().is_empty()).unwrap_or("error");
+    let first: String = first.chars().filter(|c| !c.is_control()).collect();
+    if first.chars().count() > 80 {
+        let cut: String = first.chars().take(77).collect();
+        format!("sync error: {cut}...")
+    } else {
+        format!("sync error: {first}")
+    }
+}
+
 fn refresh(pet: &mut Pet, repo: &Repo, author: &str, message: &mut String, dirty: &mut bool) {
     match sync(pet, repo, author, now_unix()) {
         Ok(n) => {
@@ -204,6 +215,22 @@ fn refresh(pet: &mut Pet, repo: &Repo, author: &str, message: &mut String, dirty
             };
             *dirty = true;
         }
-        Err(e) => *message = format!("{e}"),
+        Err(e) => {
+            *message = short_error(&e.to_string());
+            *dirty = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_error;
+
+    #[test]
+    fn errors_are_one_short_line() {
+        let s = short_error(&format!("git failed: {}\nsecond\x1b line", "x".repeat(200)));
+        assert!(!s.contains('\n'));
+        assert!(s.chars().count() <= 93);
+        assert!(s.starts_with("sync error: "));
     }
 }
