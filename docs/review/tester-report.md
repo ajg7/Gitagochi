@@ -1,5 +1,7 @@
 # Tester report
 
+Latest: multi-repo pass at the end of this file (1 BLOCKING bug).
+
 Result (round-3 pass, commit e31b79e): 50 integration tests across three passes, 0 ignored, 0 failing. cargo test, clippy -D warnings and fmt --check are clean. No BLOCKING bugs. The earlier BLOCKING branch-switch bug is RESOLVED (see Round-3 pass).
 
 ## Tests added
@@ -39,3 +41,18 @@ No BLOCKING bugs.
 
 ## Environment note
 A stale target/debug/gitagochi.exe lock (Access denied) blocked `cargo test` in the default target dir; verification was run with CARGO_TARGET_DIR set elsewhere.
+
+## Multi-repo pass (v1.1, after round-5 SATISFIED): tests/multi_repo_spec.rs
+28 tests (27 pass, 1 ignored for a BLOCKING bug). All use temp dirs; the real data dir is never written. Two binary tests pass CLI paths, so `run()` only reads the config and exits before touching any save.
+
+Covered: selection precedence (CLI over config repos, config over current dir, `.` fallback), `--author` and `--author=` parsing, config supplying repos and author, author filter applied per repo (and an overriding author), scan depth 1-3 (depth 4 excluded), skip list (node_modules, target, venv, .venv, __pycache__, hidden dirs), no descent into repos, silent skip of plain dirs, duplicate paths counted once, junctions not followed (Windows), first-seen repo baselines only (20-commit history), baseline vanished re-baselines only that repo, one shared pet and one save file across three different selections, missing and non-repo paths warn while others feed, no resolvable repo gives empty result, legacy migration (commits made while closed feed only the new ones, no reset; pet kept when its repo is not selected and the new repo only baselines; shared save blocks migration and leaves the legacy file; corrupt legacy save skipped), repos.json with BOM, doubled backslashes, single backslashes (clear error), unparseable or empty file gives a warning from load_config, unknown/partial keys, binary exits 1 with an `error:` message when no repo resolves (missing paths, plain dir).
+
+Not testable: the fatal "unparseable repos.json and no CLI paths" exit lives in `run()`, which reads the real platform data dir (`dirs::data_dir()` ignores env overrides on Windows) and cannot be redirected. Only its building block (`load_config` warning) is tested. Seam suggestion: let `run` take a data dir, or honour a `GITAGOCHI_DATA_DIR` env var. Also untestable: UI repo labels and the "N repos watched" header, the periodic rescan timer, the in-UI warning line (no terminal seam).
+
+### BLOCKING
+- **Repo that is temporarily unreadable loses its baseline and refeeds its history.** Test: tests/multi_repo_spec.rs:329 `temporarily_unavailable_repo_keeps_baseline` (ignored). Spec: "A repo seen for the first time only baselines its HEAD (existing history does not feed)" and "only walk new commits". Cause: src/lib.rs `sync_repo` sets `track.last_seen = poll.head`, and `Repo::commits_since` returns `head: None` when `rev-parse HEAD` fails (repo dir renamed, drive unmounted, .git briefly unreadable) with no error. last_seen becomes None while `initialized` stays true, so on return the whole history (up to 1000 commits per repo) feeds. Expected: keep the old last_seen when head is None. Repro: `cargo test --test multi_repo_spec -- --ignored temporarily_unavailable` (fails with left 2, right 1: base commit refed plus the new one).
+
+### Observations (non-blocking)
+- A vanished repo mid-run produces no warning or error (head None is treated as success); the user sees nothing until the next rescan.
+- Reset to an older commit then a new commit: the new commit feeds (old baseline still exists in the object db). Consistent with the known branch-switch limitation; not asserted.
+- Windows: stale target lock issue persists; verification used CARGO_TARGET_DIR in the temp dir.
