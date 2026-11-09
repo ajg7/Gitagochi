@@ -2,6 +2,7 @@
 
 pub mod content;
 pub mod curriculum;
+pub mod grade;
 pub mod proc;
 pub mod progress;
 pub mod quiz;

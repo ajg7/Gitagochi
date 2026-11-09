@@ -170,4 +170,75 @@ mod tests {
         }
         assert_eq!(Topic::ALL.len(), 10);
     }
+
+    const T: &[ObjId] = &[ObjId(1, 1)];
+
+    fn synthetic(checks: &'static [Check]) -> Module {
+        Module {
+            title: "m",
+            topic: Topic::Basics,
+            objectives: &[],
+            sections: &[],
+            read_more: &[],
+            brief: "",
+            quiz: &[],
+            checks,
+            hidden_tests: "",
+        }
+    }
+
+    #[test]
+    fn lrn_16_checks_upto_includes_earlier() {
+        let mods = [
+            synthetic(&[
+                Check {
+                    kind: CheckKind::Build,
+                    tags: T,
+                },
+                Check {
+                    kind: CheckKind::Test("m01_a"),
+                    tags: T,
+                },
+                Check {
+                    kind: CheckKind::Fmt,
+                    tags: T,
+                },
+                Check {
+                    kind: CheckKind::Clippy,
+                    tags: T,
+                },
+            ]),
+            synthetic(&[Check {
+                kind: CheckKind::Test("m02_a"),
+                tags: T,
+            }]),
+            synthetic(&[
+                Check {
+                    kind: CheckKind::Test("m03_a"),
+                    tags: T,
+                },
+                Check {
+                    kind: CheckKind::Clippy,
+                    tags: T,
+                },
+            ]),
+            synthetic(&[Check {
+                kind: CheckKind::Test("m04_a"),
+                tags: T,
+            }]),
+        ];
+        let got: Vec<(u8, CheckKind)> = checks_upto(&mods, 3)
+            .into_iter()
+            .map(|(m, ch)| (m, ch.kind))
+            .collect();
+        let want = vec![
+            (1, CheckKind::Build),
+            (1, CheckKind::Test("m01_a")),
+            (1, CheckKind::Fmt),
+            (1, CheckKind::Clippy),
+            (2, CheckKind::Test("m02_a")),
+            (3, CheckKind::Test("m03_a")),
+        ];
+        assert_eq!(got, want);
+    }
 }

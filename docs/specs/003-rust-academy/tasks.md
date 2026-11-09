@@ -46,7 +46,7 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - checks Build[1.1], `m01_counts_non_empty_lines`[1.1], `m01_empty_log_is_zero`[1.1], Fmt[1.3], Clippy[1.3];
   - hidden tests using a local `check()` helper (no `assert`);
   - a step01 solution that is fmt- and clippy-clean.
-- [ ] T014 Write failing grading tests. Each builds a temp repo from `curriculum/solutions/step01` (git run with `-c user.email=... -c user.name=... -c commit.gpgsign=false`) and uses a `GradeEnv` with temp work and target dirs and short timeouts — files: `tests/academy_grade.rs`, `src/academy/curriculum.rs` (tests module) — serves: LRN-15, LRN-16, LRN-17, LRN-25, LRN-26, LRN-27. Tests:
+- [x] T014 Write failing grading tests. Each builds a temp repo from `curriculum/solutions/step01` (git run with `-c user.email=... -c user.name=... -c commit.gpgsign=false`) and uses a `GradeEnv` with temp work and target dirs and short timeouts — files: `tests/academy_grade.rs`, `src/academy/curriculum.rs` (tests module) — serves: LRN-15, LRN-16, LRN-17, LRN-25, LRN-26, LRN-27. Tests:
   - `lrn_15_a_grades_commit_not_worktree`: step01 committed, `lib.rs` broken in the working tree; passes.
   - `lrn_15_b_clippy_warning_names_lint`: step01 plus a committed `pub fn extra() -> u8 { return 1; }`; fails, and the clippy message contains `clippy::needless_return`.
   - `lrn_17_a_failure_report_hides_source`: `count_lines` committed as returning 0; the failing result has name `m01_counts_non_empty_lines`, a non-empty message and tags [1.1], and no trimmed hidden-source line of ≥ 15 chars appears in any message.
@@ -55,7 +55,7 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - `lrn_27_a_compile_error_shown`: a committed type error; Build fails with `error[E0308]` in its message, and the Test checks fail with "does not build".
   - `lrn_27_a_infinite_loop_times_out`: `count_lines` is `loop {}`, test timeout 5 s; the m01 test checks fail with "timed out".
   - `lrn_16_checks_upto_includes_earlier`: unit test with synthetic modules; module 3's checks hold modules 1-3's checks in order, with Build/Fmt/Clippy once.
-- [ ] T015 Implement `grade.rs` per plan section 2:
+- [x] T015 Implement `grade.rs` per plan section 2:
   - `GradeEnv::new(data_dir)` holding the constants;
   - `GradeError` with `Display` messages (missing folder, not a cargo project, not a git repo, no commits, Cargo.toml not committed, tool missing + install hint, git/io);
   - preconditions, toolchain probe, export, Build/Fmt/Clippy via cargo JSON parsing (only lines starting with `{`);
