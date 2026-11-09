@@ -295,3 +295,29 @@ fn lrn_27_a_spawn_does_not_block() {
     assert!(matches!(r, Ok(Err(GradeError::Cancelled))), "{r:?}");
     job.cancel_and_join();
 }
+
+#[test]
+fn lrn_16_a_module_3_names_broken_module_1_check() {
+    let f = fixture(3);
+    set_lib(&f.repo, "pub fn count_lines(", "pub fn count_lines_old(");
+    let p = f.repo.join("src/lib.rs");
+    let mut s = fs::read_to_string(&p).unwrap();
+    s = s.replace(
+        "\n#[cfg(test)]",
+        "\npub fn count_lines(_log: &str) -> usize {\n    0\n}\n\n#[cfg(test)]",
+    );
+    s = s.replace(
+        "count_lines(\"a\n\nb\n\"), 2",
+        "count_lines_old(\"a\n\nb\n\"), 2",
+    );
+    fs::write(&p, s).unwrap();
+    commit_all(&f.repo, "break step 1");
+    let r = run(&f, 3).unwrap();
+    assert!(!r.passed());
+    let bad: Vec<_> = r.results.iter().filter(|c| !c.passed).collect();
+    assert!(
+        bad.iter()
+            .any(|c| c.module == 1 && c.name == "m01_counts_non_empty_lines"),
+        "{bad:#?}"
+    );
+}
