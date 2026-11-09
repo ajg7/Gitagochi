@@ -1,6 +1,6 @@
 //! Curriculum alignment rules over the shipped modules (LRN-02, LRN-05..08, LRN-17, LRN-18).
 
-use gitagochi::academy::curriculum::{CheckKind, ItemKind, MODULES, ObjId};
+use gitagochi::academy::curriculum::{CheckKind, ItemKind, MODULES, ObjId, Topic};
 use std::collections::HashSet;
 
 fn taught(id: ObjId) -> bool {
@@ -140,4 +140,21 @@ fn lrn_17_hidden_tests_match_checks() {
         }
         assert!(!m.hidden_tests.contains("assert"), "{}: assert", m.title);
     }
+}
+
+#[test]
+fn lrn_03_a_every_topic_has_objective() {
+    for t in Topic::ALL {
+        assert!(
+            MODULES
+                .iter()
+                .any(|m| m.topic == t && !m.objectives.is_empty()),
+            "{t:?} not covered"
+        );
+    }
+}
+
+#[test]
+fn lrn_01_ten_modules_shipped() {
+    assert_eq!(MODULES.len(), 10);
 }
