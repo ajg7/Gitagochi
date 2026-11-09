@@ -65,8 +65,8 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - work dir cleanup.
 
   — files: `src/academy/grade.rs`, `src/git.rs` (`strip_control` becomes `pub(crate)`) — serves: LRN-15, LRN-16, LRN-17, LRN-25, LRN-26, LRN-27
-- [ ] T016 Write failing test `lrn_27_a_spawn_does_not_block`: `spawn` returns at once, `rx.try_recv()` is `Empty` right after, and a result arrives later; setting `cancel` on a looping project ends the job within 2 s — files: `tests/academy_grade.rs` — serves: LRN-27
-- [ ] T017 Implement `grade::spawn` → `Job { rx, cancel, handle }` on a `std::thread` — files: `src/academy/grade.rs` — serves: LRN-27
+- [x] T016 Write failing test `lrn_27_a_spawn_does_not_block`: `spawn` returns at once, `rx.try_recv()` is `Empty` right after, and a result arrives later; setting `cancel` on a looping project ends the job within 2 s — files: `tests/academy_grade.rs` — serves: LRN-27
+- [x] T017 Implement `grade::spawn` → `Job { rx, cancel, handle }` on a `std::thread` — files: `src/academy/grade.rs` — serves: LRN-27
 - [ ] T018 Write `lrn_04_a_reference_solutions`. For every module N in `MODULES` (steps in parallel via `std::thread::scope`, each with its own target dir): committed `stepNN` passes `grade(.., N)`, and committed `step(N-1)` (step 0 = the starter assets) fails at least one of module N's own checks. With only module 1 present it must pass now, and it guards every later content task — files: `tests/academy_reference.rs` — serves: LRN-04, LRN-16
 
 ## Phase 3: Learn screen and wiring

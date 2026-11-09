@@ -248,3 +248,50 @@ fn lrn_27_a_infinite_loop_times_out() {
         assert!(c.message.contains("timed out"), "{}", c.message);
     }
 }
+
+#[test]
+fn lrn_27_a_spawn_does_not_block() {
+    use gitagochi::academy::grade::spawn;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc::TryRecvError;
+    use std::time::Instant;
+
+    let f = fixture(1);
+    commit_all(&f.repo, "step 1");
+    let t = Instant::now();
+    let job = spawn(f.repo.clone(), 1, f.env.clone());
+    assert!(t.elapsed() < Duration::from_secs(1));
+    assert!(matches!(job.rx.try_recv(), Err(TryRecvError::Empty)));
+    let r = job
+        .rx
+        .recv_timeout(Duration::from_secs(300))
+        .unwrap()
+        .unwrap();
+    assert!(r.passed(), "{:?}", r.results);
+
+    let mut g = fixture(1);
+    g.env.test_timeout = Duration::from_secs(120);
+    set_lib(&g.repo, COUNT_BODY, "let _ = log;\n    loop {}");
+    commit_all(&g.repo, "loop");
+    let job = spawn(g.repo.clone(), 1, g.env.clone());
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(300) {
+        let running = fs::read_dir(g.env.target_dir.join("debug/deps"))
+            .map(|d| {
+                d.flatten()
+                    .any(|e| e.file_name().to_string_lossy().starts_with("academy_m01"))
+            })
+            .unwrap_or(false);
+        if running {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    std::thread::sleep(Duration::from_secs(2));
+    job.cancel.store(true, Ordering::Relaxed);
+    let t = Instant::now();
+    let r = job.rx.recv_timeout(Duration::from_secs(2));
+    assert!(t.elapsed() < Duration::from_secs(2));
+    assert!(matches!(r, Ok(Err(GradeError::Cancelled))), "{r:?}");
+    job.cancel_and_join();
+}
