@@ -1,8 +1,8 @@
 # 003 Rust academy
 
 Status: In progress
-Version: 1.0
-Depends on: 001, 002 (the learner's project is a watched repo; its commits feed the pet under CORE-01/MR-11, unchanged)
+Version: 1.1
+Depends on: 001, 002 (the learner's project is a watched repo; its commits feed the pet under CORE-01/MR-11, unchanged); LRN-29 narrows MR-09
 Requirement prefix: LRN
 
 ## Why
@@ -44,7 +44,7 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-17** When a project check fails, the app shall show each failing check's name, the compiler, test or lint message, and the objective and lesson section to revisit; it shall not show the hidden test source.
 - **LRN-18** The quiz shall contain multiple-choice and spot-the-bug (pick the correct fix) items, and shall pass at a score of 80% or more.
 - **LRN-19** When the learner submits a quiz, the app shall show the score and, for each missed item, the objective it tested and the lesson section that teaches it.
-- **LRN-20** The app shall let the learner retake a quiz or rerun a project check any number of times; a retake shall present the items in a different order.
+- **LRN-20** The app shall let the learner retake a quiz or rerun a project check any number of times; a retake shall present the items in a different order, and every attempt shall present each item's choices in a shuffled order.
 - **LRN-21** When a module is passed, the app shall show a badge for it on the pet screen; passing shall not change hunger, health or feeding (CORE-03 still holds).
 - **LRN-22** While a module is passed, the learner shall be able to reread it and retake its assessment for practice without losing the pass.
 
@@ -56,6 +56,8 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-25** If the Rust toolchain is missing, then the app shall say which tool is missing and how to install it, and keep lessons and quizzes usable.
 - **LRN-26** If the project folder is missing, is not a cargo project, or has no commits, then the app shall say which and not pass the project part.
 - **LRN-27** If the project does not build or a check runs too long, then the app shall fail that check with the build output or a timeout message and stay responsive.
+- **LRN-28** The project part's result shall depend only on whether the checks really passed; nothing the learner's program prints shall make a check pass.
+- **LRN-29** If no paths are given and no repo can be resolved (no config, and the current directory is not or holds no repo), then the app shall open with a "no repos watched yet" notice instead of exiting, so the learn screen and project setup are reachable. Explicit paths that resolve to no repo still exit 1 (CORE-20, MR-09).
 
 ## Acceptance criteria
 - **LRN-01.a** Given no network, when the learner opens the learn screen, then all modules are listed in order.
@@ -80,6 +82,7 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-18.a** Given a quiz of 10 items, when 8 are correct, then it passes; when 7 are correct, then it fails.
 - **LRN-19.a** Given a quiz with one wrong answer, when submitted, then the score is shown and the missed item's objective and lesson section are named.
 - **LRN-20.a** Given a failed quiz, when retaken, then it can be taken again and the item order differs.
+- **LRN-20.b** Given any module's quiz, when every attempt's answers always pick the same displayed position (1st, 2nd, ...), then no such strategy reaches the 80% pass mark with certainty; across attempts the correct choice's position varies.
 - **LRN-21.a** Given module 1 just passed, when the pet screen shows, then a module 1 badge is visible and hunger and health are unchanged by the pass.
 - **LRN-22.a** Given a passed module, when its quiz is retaken and failed, then the module is still passed.
 - **LRN-23.a** Given module 1 passed and a project folder set, when the app restarts, then module 1 shows as passed, module 2 is open and the project folder is remembered.
@@ -87,6 +90,9 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-25.a** Given no Rust toolchain on PATH, when a project check runs, then a message names the missing tool and lessons and quizzes still work.
 - **LRN-26.a** Given a project folder that is a plain folder, when checked, then the app says it is not a cargo project and the project part is not passed.
 - **LRN-27.a** Given a committed project that does not compile, when checked, then the check fails with the compiler output and the UI keeps responding.
+- **LRN-28.a** Given a committed project that fails a hidden check but whose code prints fake passing test lines (e.g. `test m01_x ... ok`, `test result: ok`), when checked, then that check still fails.
+- **LRN-29.a** Given no `repos.json` and a current directory that holds no repo, when the app starts with no paths, then it opens, shows the notice, and `l` opens the learn screen.
+- **LRN-29.b** Given an explicit path that is a plain folder, when the app runs on it, then it still exits 1.
 
 ## Edge cases
 - Progress file missing / corrupt → LRN-24
@@ -123,6 +129,9 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - 2026-11-08: Q: Lesson content? A: self-contained in-app, optional Rust Book pointers → LRN-05, LRN-06
 - 2026-11-08: Q: Reset? A: revisit and retake freely, no reset → LRN-22
 - 2026-11-08: Q: Planner interpretations 1-6 in plan.md Analysis (project watched via progress file not repos.json; fmt/clippy carried to every module; quiz and project parts pass independently; locked modules fully closed; folder chosen by typed path; retake order differs within a session)? A: accepted as planned → LRN-12, LRN-15, LRN-16, LRN-14, LRN-11, LRN-20
+- 2026-11-08: Q (round 1 gap S2): must answer choices be shuffled? A: yes, every attempt → LRN-20, LRN-20.b
+- 2026-11-08: Q (round 1 gap S1): new user with no repo cannot reach the learn screen? A: open with no repos and a notice, when no paths are given → LRN-29 (narrows MR-09)
+- 2026-11-08: Q (round 1 gap S3): must grading resist fake test output printed by learner code? A: yes → LRN-28
 
 ## Known limitations
 
@@ -130,3 +139,4 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - 0.1 (2026-11-08): first draft.
 - 0.2 (2026-11-08): open questions resolved with the owner.
 - 1.0 (2026-11-08): approved by the owner.
+- 1.1 (2026-11-08): owner decisions on round 1 spec gaps: shuffled choices (LRN-20), LRN-28, LRN-29.

@@ -28,7 +28,7 @@ Real work is spread across many repos. A pet fed by only one of them goes hungry
 
 ### Errors
 - **MR-08** If a configured path is missing or not a repo, then the app shall skip it, show a one-line warning, and keep feeding from the others.
-- **MR-09** If no repo at all can be resolved, then the app shall exit with a clear message and exit code 1.
+- **MR-09** If no repo at all can be resolved, then the app shall exit with a clear message and exit code 1. (Narrowed by LRN-29: when no paths are given, the app opens with a notice instead.)
 - **MR-10** If a watched repo becomes unreadable, then the app shall warn, keep its baseline, and resume without refeeding when it recovers.
 
 ### One shared pet
