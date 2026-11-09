@@ -1,6 +1,6 @@
 //! Curriculum types, the shipped module list and lookups.
 
-use super::content::{m01, m02, m03, m04, m05, m06};
+use super::content::{m01, m02, m03, m04, m05, m06, m07};
 
 /// Objective id: (module number, objective number), both 1-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -115,6 +115,7 @@ pub static MODULES: &[Module] = &[
     m04::MODULE,
     m05::MODULE,
     m06::MODULE,
+    m07::MODULE,
 ];
 
 /// Look up an objective in the shipped curriculum.
