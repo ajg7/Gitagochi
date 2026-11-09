@@ -1,6 +1,6 @@
 //! Curriculum types, the shipped module list and lookups.
 
-use super::content::m01;
+use super::content::{m01, m02};
 
 /// Objective id: (module number, objective number), both 1-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -108,7 +108,7 @@ pub struct Module {
 }
 
 /// The shipped curriculum; module number = index + 1.
-pub static MODULES: &[Module] = &[m01::MODULE];
+pub static MODULES: &[Module] = &[m01::MODULE, m02::MODULE];
 
 /// Look up an objective in the shipped curriculum.
 pub fn objective(id: ObjId) -> Option<&'static Objective> {
