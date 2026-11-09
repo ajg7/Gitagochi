@@ -24,11 +24,11 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - `lrn_24_a_corrupt_progress_backed_up`: invalid JSON leaves a `.bak` and module 1 open; also covers the missing-file case;
   - a sanitize test: unknown module keys dropped, `quiz_best` clamped to 100.
 - [x] T004 Implement `Progress`/`ModuleProgress` (`passed`, `open`, `record_quiz`, `record_project_pass`, `badges`, `sanitize`). In `store.rs`, factor `write_atomic` out of `save` (same behavior) and add `progress_path`, `load_progress` and `save_progress` using `backup()` — files: `src/academy/progress.rs`, `src/store.rs` — serves: LRN-11, LRN-14, LRN-22, LRN-23, LRN-24
-- [ ] T005 [P] Write failing tests for the quiz — files: `src/academy/quiz.rs` (tests module) — serves: LRN-18, LRN-20. Tests:
+- [x] T005 [P] Write failing tests for the quiz — files: `src/academy/quiz.rs` (tests module) — serves: LRN-18, LRN-20. Tests:
   - `lrn_18_a_eight_of_ten_passes_seven_fails`;
   - `lrn_20_a_retake_order_differs`: across 1000 seeds `order(n, Some(prev), seed) != prev` for n ≥ 2, and the result is always a permutation;
   - `score` reports the missed item indices.
-- [ ] T006 Implement `score`/`Score` (integer 80% rule) and `order` (xorshift64 Fisher-Yates, rotated by one if equal to `prev`) — files: `src/academy/quiz.rs` — serves: LRN-18, LRN-19, LRN-20
+- [x] T006 Implement `score`/`Score` (integer 80% rule) and `order` (xorshift64 Fisher-Yates, rotated by one if equal to `prev`) — files: `src/academy/quiz.rs` — serves: LRN-18, LRN-19, LRN-20
 - [ ] T007 [P] Write failing test `lrn_27_timeout_kills`: `run_capped` on `git hash-object --stdin` with stdin held open returns `Exit::TimedOut` within timeout + 1 s; a quick `git --version` returns `Exit::Code(0)` with stdout captured; output beyond `OUTPUT_CAP` is truncated — files: `src/academy/proc.rs` (tests module) — serves: LRN-27
 - [ ] T008 Implement `proc::run_capped(cmd, timeout, cancel) -> io::Result<RunOut>`: stdin null unless the caller set it; two capped reader threads; 50 ms `try_wait` loop; kill then wait on timeout or cancel; detach readers after a kill — files: `src/academy/proc.rs` — serves: LRN-27
 - [ ] T009 [P] Add the starter project assets and write failing scaffold tests — files: `curriculum/starter/{Cargo.toml.in,lib.rs,main.rs,gitignore}`, `tests/academy_project.rs` — serves: LRN-12, LRN-13. Tests:
