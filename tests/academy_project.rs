@@ -57,3 +57,66 @@ fn lrn_13_a_non_empty_folder_refused_unchanged() {
     assert!(matches!(create(&file), Err(ScaffoldError::NotEmpty(_))));
     assert_eq!(fs::read_to_string(&file).unwrap(), "x");
 }
+
+use gitagochi::academy::progress::Progress;
+use gitagochi::pet::Pet;
+use gitagochi::repos::resolve;
+use gitagochi::{sync_all, watched_paths};
+use std::process::Command;
+
+fn git(dir: &Path, args: &[&str]) {
+    let o = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.email=learner@x.io",
+            "-c",
+            "user.name=l",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+}
+
+#[test]
+fn lrn_12_a_project_is_watched() {
+    let d = tempfile::tempdir().unwrap();
+    let project = d.path().join("my tracker");
+    create(&project).unwrap();
+    let other = d.path().join("other");
+    fs::create_dir_all(&other).unwrap();
+    git(&other, &["init", "-q"]);
+    let progress = Progress {
+        project: Some(project.clone()),
+        ..Progress::default()
+    };
+    let key = Repo::open(&project).unwrap().key().to_string();
+    for cli in [vec![], vec![other.clone()], vec![project.clone()]] {
+        let r = resolve(&watched_paths(cli, &progress));
+        assert!(r.repos.iter().any(|x| x.key() == key), "not watched");
+        assert_eq!(r.repos.iter().filter(|x| x.key() == key).count(), 1);
+    }
+}
+
+#[test]
+fn lrn_12_b_project_commit_feeds_pet() {
+    let d = tempfile::tempdir().unwrap();
+    let project = d.path().join("my tracker");
+    create(&project).unwrap();
+    let progress = Progress {
+        project: Some(project.clone()),
+        ..Progress::default()
+    };
+    let repos = resolve(&watched_paths(vec![], &progress)).repos;
+    let mut pet = Pet::new(0);
+    assert_eq!(sync_all(&mut pet, &repos, "learner@x.io", 0).fed, 0);
+    git(&project, &["add", "-A"]);
+    git(&project, &["commit", "-q", "-m", "step 1"]);
+    let r = sync_all(&mut pet, &repos, "learner@x.io", 1);
+    assert_eq!(r.fed, 1, "{:?}", r.errors);
+    assert_eq!(pet.total_fed, 1);
+}

@@ -70,7 +70,7 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
 - [x] T018 Write `lrn_04_a_reference_solutions`. For every module N in `MODULES` (steps in parallel via `std::thread::scope`, each with its own target dir): committed `stepNN` passes `grade(.., N)`, and committed `step(N-1)` (step 0 = the starter assets) fails at least one of module N's own checks. With only module 1 present it must pass now, and it guards every later content task — files: `tests/academy_reference.rs` — serves: LRN-04, LRN-16
 
 ## Phase 3: Learn screen and wiring
-- [ ] T019 Write failing tests for the learn screen — files: `src/learn.rs` (tests module) — serves: LRN-01, LRN-09, LRN-10, LRN-11, LRN-17, LRN-19, LRN-20, LRN-22. Tests:
+- [x] T019 Write failing tests for the learn screen — files: `src/learn.rs` (tests module) — serves: LRN-01, LRN-09, LRN-10, LRN-11, LRN-17, LRN-19, LRN-20, LRN-22. Tests:
   - `lrn_09_a_l_opens_list_esc_returns`: `Nav::Pet` + `l` gives the list; Esc gives `Nav::Pet`.
   - `lrn_10_a_lesson_brief_quiz_check_reachable`: from a module menu, Lesson, Brief and Quiz are reachable, and Check gives `Action::StartCheck(1)`, or a prompt to press `p` when no project is set.
   - `lrn_11_a_module_2_locked`: Enter on module 2 with module 1 not passed stays on the list and shows a locked message.
@@ -79,7 +79,7 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - `lrn_17_a_check_lines_show_name_message_section`: `check_lines` on a failing `CheckResult` shows the name, the message, and "revisit: module 1, <section>".
   - `lrn_01_a_lists_all_modules_in_order`: TestBackend render of the list shows every `MODULES` title in order, with locked/open/passed markers.
   - `lrn_22_a_passed_module_reopens`: a passed module can be opened and its quiz retaken.
-- [ ] T020 Implement `learn.rs`:
+- [x] T020 Implement `learn.rs`:
   - `Nav` (Pet, List, Menu, Reader for lesson/brief with scroll, Quiz, QuizResult, Check with Running/Done, Setup with a path input);
   - `Action`;
   - `handle_key`;
@@ -87,11 +87,11 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - `quiz_lines` and `check_lines`.
 
   — files: `src/learn.rs`, `src/lib.rs` (`pub mod learn`) — serves: LRN-09, LRN-10, LRN-11, LRN-17, LRN-19, LRN-20, LRN-22
-- [ ] T021 Write failing wiring tests — files: `src/ui.rs` (tests module), `tests/academy_project.rs` — serves: LRN-12, LRN-21. Tests:
+- [x] T021 Write failing wiring tests — files: `src/ui.rs` (tests module), `tests/academy_project.rs` — serves: LRN-12, LRN-21. Tests:
   - `lrn_21_a_badge_shown_pet_unchanged`: TestBackend render of the pet screen with module 1 passed shows `[1]`, and the `Pet` before and after is equal.
   - `lrn_12_a_project_is_watched`: `resolve(&watched_paths(paths, &progress))` contains the scaffolded repo, including when the CLI or config paths do not list it.
   - `lrn_12_b_project_commit_feeds_pet`: scaffold, `sync_all` (baseline), commit as the author, `sync_all` → fed 1.
-- [ ] T022 Wire up the app:
+- [x] T022 Wire up the app:
   - `lib::watched_paths`, and `run()` loads progress, builds `GradeEnv` and fills the new `Session` fields;
   - in `ui.rs`: the `l` key, `Nav` dispatch and drawing, a badges line in the pet panel, the `l: learn` hint;
   - carry out the actions: `SaveProgress` → `store::save_progress`; `StartCheck` → `spawn`, poll `try_recv` each frame, `record_project_pass` and save on pass; `Scaffold` → `create`, set `progress.project`, save, push to the live paths and force a rescan;

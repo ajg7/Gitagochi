@@ -2,6 +2,7 @@
 
 pub mod academy;
 pub mod git;
+pub mod learn;
 pub mod pet;
 pub mod repos;
 pub mod store;
@@ -131,6 +132,19 @@ pub fn effective_paths(cli: Vec<PathBuf>, config: &repos::Config) -> Vec<PathBuf
     }
 }
 
+/// Watched paths plus the academy project folder, if one is set up.
+pub fn watched_paths(
+    mut paths: Vec<PathBuf>,
+    progress: &academy::progress::Progress,
+) -> Vec<PathBuf> {
+    if let Some(p) = &progress.project
+        && !paths.contains(p)
+    {
+        paths.push(p.clone());
+    }
+    paths
+}
+
 /// Entry point used by `main`. Errors are user-facing messages.
 pub fn run(args: Args) -> Result<(), String> {
     let data_dir = store::default_data_dir();
@@ -142,7 +156,9 @@ pub fn run(args: Args) -> Result<(), String> {
         return Err(format!("{}: {w}", config_file.display()));
     }
     let author_arg = args.author.or_else(|| config.author.clone());
-    let paths = effective_paths(args.paths, &config);
+    let progress_file = store::progress_path(&data_dir);
+    let progress = store::load_progress(&progress_file, academy::curriculum::MODULES.len());
+    let paths = watched_paths(effective_paths(args.paths, &config), &progress);
     let resolved = repos::resolve(&paths);
     if resolved.repos.is_empty() {
         let mut msgs = resolved.warnings;
@@ -170,6 +186,12 @@ pub fn run(args: Args) -> Result<(), String> {
         author,
         save_file,
         initial_warning: config_warning,
+        progress,
+        progress_file,
+        grade_env: academy::grade::GradeEnv::new(&data_dir),
+        default_project: dirs::home_dir()
+            .unwrap_or_default()
+            .join("gitagochi-tracker"),
     };
     ui::run(session, resolved, pet).map_err(|e| format!("terminal error: {e}"))
 }

@@ -1,6 +1,10 @@
 //! Terminal UI: renders from state and runs the event loop.
 
+use crate::academy::grade::{self, GradeEnv, GradeError, Job};
+use crate::academy::progress::Progress;
+use crate::academy::{quiz, scaffold};
 use crate::git::Repo;
+use crate::learn::{self, Action, Learn, Nav};
 use crate::pet::{Mood, Pet, Stage};
 use crate::repos::{self, Resolved};
 use crate::{now_unix, store, sync_all};
@@ -11,7 +15,8 @@ use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, Paragraph};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
@@ -62,6 +67,8 @@ pub struct View<'a> {
     pub repo_count: usize,
     pub author: &'a str,
     pub message: &'a str,
+    /// Passed curriculum modules.
+    pub badges: &'a [u8],
 }
 
 pub fn draw(f: &mut Frame, v: &View) {
@@ -78,7 +85,12 @@ pub fn draw(f: &mut Frame, v: &View) {
         .into_iter()
         .map(|s| Line::from(s).centered())
         .collect();
-    lines.push(Line::from(format!("{:?} / {:?}", pet.stage(), pet.mood())).centered());
+    let mut status = format!("{:?} / {:?}", pet.stage(), pet.mood());
+    if !v.badges.is_empty() {
+        let b: Vec<String> = v.badges.iter().map(|m| format!("[{m}]")).collect();
+        status.push_str(&format!("   Badges: {}", b.join(" ")));
+    }
+    lines.push(Line::from(status).centered());
     f.render_widget(
         Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(format!(
             " Gitagochi - watching {} repo{} ",
@@ -131,7 +143,7 @@ pub fn draw(f: &mut Frame, v: &View) {
         rows[2],
     );
 
-    let hint = format!("q: quit  r: refresh  {}", v.message);
+    let hint = format!("q: quit  r: refresh  l: learn  {}", v.message);
     f.render_widget(Paragraph::new(hint), rows[3]);
 }
 
@@ -141,25 +153,43 @@ pub struct Session {
     pub author: String,
     pub save_file: PathBuf,
     pub initial_warning: Option<String>,
+    pub progress: Progress,
+    pub progress_file: PathBuf,
+    pub grade_env: GradeEnv,
+    pub default_project: PathBuf,
 }
 
 /// Run the interactive loop. Terminal is restored on return and on panic
 /// (`ratatui::init` installs a panic hook that restores it).
 pub fn run(session: Session, resolved: Resolved, mut pet: Pet) -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, &session, resolved, &mut pet);
+    let result = event_loop(&mut terminal, session, resolved, &mut pet);
     ratatui::restore();
     result
 }
 
+fn pet_status(pet: &Pet) -> String {
+    format!(
+        " Pet: {:?} / {:?}   hunger {:.0}%   health {:.0}%",
+        pet.stage(),
+        pet.mood(),
+        pet.hunger,
+        pet.health
+    )
+}
+
 fn event_loop(
     terminal: &mut ratatui::DefaultTerminal,
-    session: &Session,
+    session: Session,
     resolved: Resolved,
     pet: &mut Pet,
 ) -> io::Result<()> {
     let author = session.author.as_str();
     let save_file = session.save_file.as_path();
+    let mut paths = session.paths.clone();
+    let mut progress = session.progress;
+    let mut learn = Learn::new(session.default_project.clone());
+    let mut job: Option<Job> = None;
     let mut repos = resolved.repos;
     let mut warnings = resolved.warnings;
     warnings.extend(session.initial_warning.clone());
@@ -172,7 +202,7 @@ fn event_loop(
         let due = last_poll.is_none_or(|t| t.elapsed() >= POLL_INTERVAL);
         if due {
             if force_scan || last_scan.elapsed() >= RESCAN_INTERVAL {
-                let r = repos::resolve(&session.paths);
+                let r = repos::resolve(&paths);
                 repos = r.repos;
                 warnings = r.warnings;
                 warnings.extend(session.initial_warning.clone());
@@ -191,34 +221,95 @@ fn event_loop(
             }
             dirty = false;
         }
+        if let Some(j) = &job {
+            let got = match j.rx.try_recv() {
+                Ok(r) => Some(r),
+                Err(TryRecvError::Empty) => None,
+                Err(TryRecvError::Disconnected) => {
+                    Some(Err(GradeError::Io("the check stopped unexpectedly".into())))
+                }
+            };
+            if let Some(r) = got {
+                let m = j.module;
+                if r.as_ref().is_ok_and(|rep| rep.passed()) {
+                    progress.record_project_pass(m);
+                    save_progress(&session.progress_file, &progress, &mut learn);
+                }
+                learn.check_done(m, r);
+                job = None;
+            }
+        }
+        let badges = progress.badges();
         terminal.draw(|f| {
-            draw(
-                f,
-                &View {
-                    pet,
-                    repo_count: repos.len(),
-                    author,
-                    message: &message,
-                },
-            )
+            if learn.nav == Nav::Pet {
+                draw(
+                    f,
+                    &View {
+                        pet,
+                        repo_count: repos.len(),
+                        author,
+                        message: &message,
+                        badges: &badges,
+                    },
+                )
+            } else {
+                learn::draw(f, &learn, &progress, &pet_status(pet))
+            }
         })?;
         if event::poll(FRAME_INTERVAL)?
             && let Event::Key(k) = event::read()?
             && k.kind == KeyEventKind::Press
         {
-            match k.code {
-                KeyCode::Char('q') | KeyCode::Esc => break,
-                KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => break,
-                KeyCode::Char('r') => {
+            if k.code == KeyCode::Char('c') && k.modifiers.contains(KeyModifiers::CONTROL) {
+                break;
+            }
+            match learn.handle_key(k.code, &mut progress, quiz::clock_seed()) {
+                Action::None => {}
+                Action::Quit => break,
+                Action::Refresh => {
                     last_poll = None;
                     force_scan = true;
                 }
-                _ => {}
+                Action::SaveProgress => {
+                    save_progress(&session.progress_file, &progress, &mut learn)
+                }
+                Action::StartCheck(m) => {
+                    if let (None, Some(p)) = (&job, &progress.project) {
+                        job = Some(grade::spawn(p.clone(), m, session.grade_env.clone()));
+                        learn.running = Some(m);
+                    }
+                }
+                Action::Scaffold(dir) => match scaffold::create(&dir) {
+                    Ok(()) => {
+                        let dir = std::path::absolute(&dir).unwrap_or(dir);
+                        progress.project = Some(dir.clone());
+                        save_progress(&session.progress_file, &progress, &mut learn);
+                        if !paths.contains(&dir) {
+                            paths.push(dir.clone());
+                        }
+                        force_scan = true;
+                        last_poll = None;
+                        learn.setup_done(format!(
+                            "Project created in {}; it is watched, so commits there feed your pet",
+                            dir.display()
+                        ));
+                    }
+                    Err(e) => learn.setup_failed(e.to_string()),
+                },
             }
         }
     }
+    if let Some(j) = job {
+        j.cancel_and_join();
+    }
     let _ = store::save(save_file, pet);
     Ok(())
+}
+
+fn save_progress(path: &Path, progress: &Progress, learn: &mut Learn) {
+    if let Err(e) = store::save_progress(path, progress) {
+        learn.note = format!("saving progress failed: {e}");
+    }
 }
 
 fn short_error(e: &str) -> String {
@@ -248,7 +339,41 @@ fn refresh(pet: &mut Pet, repos: &[Repo], author: &str, warnings: &[String], mes
 
 #[cfg(test)]
 mod tests {
-    use super::short_error;
+    use super::*;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    #[test]
+    fn lrn_21_a_badge_shown_pet_unchanged() {
+        let pet = Pet::new(1000);
+        let before = pet.clone();
+        let mut progress = Progress::default();
+        progress.record_quiz(1, 100);
+        progress.record_project_pass(1);
+        let badges = progress.badges();
+        let mut t = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        t.draw(|f| {
+            draw(
+                f,
+                &View {
+                    pet: &pet,
+                    repo_count: 1,
+                    author: "a@b.c",
+                    message: "",
+                    badges: &badges,
+                },
+            )
+        })
+        .unwrap();
+        let buf = t.backend().buffer();
+        let text: String = (0..buf.area.height)
+            .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
+            .map(|p| buf[p].symbol().to_string())
+            .collect();
+        assert!(text.contains("Badges: [1]"), "{text}");
+        assert!(text.contains("l: learn"));
+        assert_eq!(pet, before);
+    }
 
     #[test]
     fn errors_are_one_short_line() {
