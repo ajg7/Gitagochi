@@ -1,5 +1,6 @@
 //! Gitagochi: a terminal pet that feeds on git commits.
 
+pub mod academy;
 pub mod git;
 pub mod pet;
 pub mod repos;

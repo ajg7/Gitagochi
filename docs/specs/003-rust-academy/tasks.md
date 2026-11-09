@@ -7,8 +7,8 @@ There is one exception to "gates green". A task titled "Write failing tests" may
 Design details (types, commands, the per-module API table) are in `plan.md`; follow it rather than re-deciding.
 
 ## Phase 1: Foundations
-- [ ] T001 Add curriculum types (`ObjId`, `Topic` + `Topic::ALL`, `Objective`, `Section`, `ItemKind`, `Item`, `CheckKind`, `Check`, `Module`), an empty `MODULES`, the lookups `objective`, `section` and `checks_upto` (deduplicates Build/Fmt/Clippy, keeps module order), and wire up `pub mod academy` — files: `src/lib.rs`, `src/academy/mod.rs`, `src/academy/curriculum.rs` — serves: LRN-01, LRN-02, LRN-07, LRN-16
-- [ ] T002 Write the curriculum alignment tests over `MODULES`; with no modules yet they pass vacuously and guard every later content task — files: `tests/academy_content.rs` — serves: LRN-02, LRN-05, LRN-06, LRN-07, LRN-08, LRN-17, LRN-18. Tests:
+- [x] T001 Add curriculum types (`ObjId`, `Topic` + `Topic::ALL`, `Objective`, `Section`, `ItemKind`, `Item`, `CheckKind`, `Check`, `Module`), an empty `MODULES`, the lookups `objective`, `section` and `checks_upto` (deduplicates Build/Fmt/Clippy, keeps module order), and wire up `pub mod academy` — files: `src/lib.rs`, `src/academy/mod.rs`, `src/academy/curriculum.rs` — serves: LRN-01, LRN-02, LRN-07, LRN-16
+- [x] T002 Write the curriculum alignment tests over `MODULES`; with no modules yet they pass vacuously and guard every later content task — files: `tests/academy_content.rs` — serves: LRN-02, LRN-05, LRN-06, LRN-07, LRN-08, LRN-17, LRN-18. Tests:
   - `lrn_02_a_every_module_complete`: objectives, sections, brief, quiz and checks are all non-empty.
   - `lrn_05_a_objectives_name_nonempty_sections`.
   - `lrn_06_a_items_taught_in_lessons`, plus `read_more` holds only `https://doc.rust-lang.org/book/` URLs.
