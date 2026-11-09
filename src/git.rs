@@ -73,6 +73,43 @@ pub fn init(dir: &Path) -> Result<(), GitError> {
     stdout(dir, &["init", "-q"]).map(|_| ())
 }
 
+/// Write HEAD's committed tree of the repo at `root` into `dest`, using a
+/// private index file so the repo's index, refs and work tree are untouched.
+/// Returns the commit id.
+pub fn export_head(root: &Path, dest: &Path, index_file: &Path) -> Result<String, GitError> {
+    let sha = stdout(root, &["rev-parse", "--verify", "-q", "HEAD^{commit}"])
+        .map_err(|_| GitError::Command("the repository has no commits".into()))?
+        .trim()
+        .to_string();
+    std::fs::create_dir_all(dest).map_err(|e| GitError::Command(e.to_string()))?;
+    let git = |args: &[&std::ffi::OsStr]| -> Result<(), GitError> {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .env("GIT_INDEX_FILE", index_file)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|_| GitError::GitNotFound)?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(GitError::Command(
+                String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            ))
+        }
+    };
+    git(&["read-tree".as_ref(), sha.as_ref()])?;
+    git(&[
+        "--work-tree".as_ref(),
+        dest.as_os_str(),
+        "checkout-index".as_ref(),
+        "-a".as_ref(),
+        "-f".as_ref(),
+    ])?;
+    Ok(sha)
+}
+
 impl Repo {
     /// Open the repo containing `path`; clear error if it is not a git repo.
     pub fn open(path: &Path) -> Result<Repo, GitError> {
@@ -191,7 +228,7 @@ impl Repo {
     }
 }
 
-fn strip_control(s: &str) -> String {
+pub(crate) fn strip_control(s: &str) -> String {
     let mut out = String::new();
     let mut it = s.chars().peekable();
     while let Some(c) = it.next() {
