@@ -4,3 +4,4 @@ pub mod curriculum;
 pub mod proc;
 pub mod progress;
 pub mod quiz;
+pub mod scaffold;

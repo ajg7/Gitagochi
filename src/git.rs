@@ -68,6 +68,11 @@ fn stdout(dir: &Path, args: &[&str]) -> Result<String, GitError> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Create an empty git repo in `dir` (no commit).
+pub fn init(dir: &Path) -> Result<(), GitError> {
+    stdout(dir, &["init", "-q"]).map(|_| ())
+}
+
 impl Repo {
     /// Open the repo containing `path`; clear error if it is not a git repo.
     pub fn open(path: &Path) -> Result<Repo, GitError> {
