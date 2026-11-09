@@ -35,6 +35,8 @@ pub enum Nav {
     Quiz {
         m: u8,
         order: Vec<usize>,
+        /// Per shown item, the authored choice index at each displayed position.
+        choices: Vec<Vec<usize>>,
         answers: Vec<usize>,
     },
     QuizResult {
@@ -103,12 +105,18 @@ impl Learn {
     }
 
     fn start_quiz(&mut self, m: u8, seed: u64) {
-        let n = module(m).quiz.len();
-        let order = quiz::order(n, self.last_order.get(&m).map(Vec::as_slice), seed);
+        let items = module(m).quiz;
+        let order = quiz::order(
+            items.len(),
+            self.last_order.get(&m).map(Vec::as_slice),
+            seed,
+        );
         self.last_order.insert(m, order.clone());
+        let choices = quiz::choice_orders(items, &order, seed);
         self.go(Nav::Quiz {
             m,
             order,
+            choices,
             answers: Vec::new(),
         });
     }
@@ -217,6 +225,7 @@ impl Learn {
             Nav::Quiz {
                 m,
                 order,
+                choices,
                 mut answers,
             } => {
                 let choice = match key {
@@ -229,13 +238,17 @@ impl Learn {
                     return Action::None;
                 }
                 let items = module(m).quiz;
-                let Some(c) = choice else { return Action::None };
-                if c >= items[order[answers.len()]].choices.len() {
+                let Some(&c) = choice.and_then(|c| choices[answers.len()].get(c)) else {
                     return Action::None;
-                }
+                };
                 answers.push(c);
                 if answers.len() < order.len() {
-                    self.nav = Nav::Quiz { m, order, answers };
+                    self.nav = Nav::Quiz {
+                        m,
+                        order,
+                        choices,
+                        answers,
+                    };
                     return Action::None;
                 }
                 let shown: Vec<_> = order.iter().map(|&i| items[i]).collect();
@@ -445,7 +458,12 @@ fn body(l: &Learn, p: &Progress) -> (String, Vec<String>, &'static str) {
                 "Up/Down PgUp/PgDn scroll  Esc back  q quit",
             )
         }
-        Nav::Quiz { m, order, answers } => {
+        Nav::Quiz {
+            m,
+            order,
+            choices,
+            answers,
+        } => {
             let item = &module(*m).quiz[order[answers.len()]];
             let mut lines = vec![
                 format!("Question {} of {}", answers.len() + 1, order.len()),
@@ -453,8 +471,8 @@ fn body(l: &Learn, p: &Progress) -> (String, Vec<String>, &'static str) {
             ];
             lines.extend(item.prompt.lines().map(str::to_string));
             lines.push(String::new());
-            for (i, c) in item.choices.iter().enumerate() {
-                lines.push(format!("  {}) {c}", i + 1));
+            for (i, &c) in choices[answers.len()].iter().enumerate() {
+                lines.push(format!("  {}) {}", i + 1, item.choices[c]));
             }
             (
                 format!(" Module {m}: quiz "),
@@ -631,18 +649,23 @@ mod tests {
     }
 
     fn take_quiz(l: &mut Learn, p: &mut Progress, wrong: usize) -> Action {
-        let Nav::Quiz { m, order, .. } = l.nav.clone() else {
+        let Nav::Quiz {
+            m, order, choices, ..
+        } = l.nav.clone()
+        else {
             panic!("not in a quiz")
         };
         let items = module(m).quiz;
         let mut last = Action::None;
         for (k, &i) in order.iter().enumerate() {
-            let ans = if k < wrong {
-                (items[i].answer + 1) % items[i].choices.len()
+            let right = choices[k].iter().position(|&c| c == items[i].answer);
+            let right = right.expect("answer is shown");
+            let pos = if k < wrong {
+                (right + 1) % choices[k].len()
             } else {
-                items[i].answer
+                right
             };
-            last = l.handle_key(KeyCode::Char((b'1' + ans as u8) as char), p, 0);
+            last = l.handle_key(KeyCode::Char((b'1' + pos as u8) as char), p, 0);
         }
         last
     }
@@ -707,6 +730,61 @@ mod tests {
         };
         assert!(answers.is_empty());
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn lrn_20_b_no_fixed_position_passes() {
+        let mut p = Progress::default();
+        let items = |m: u8| module(m).quiz;
+        for m in 1..=MODULES.len() as u8 {
+            let mut right_at = vec![std::collections::HashSet::new(); items(m).len()];
+            for pos in 0..4usize {
+                let mut passes = 0;
+                for seed in 0..200u64 {
+                    let mut l = learn();
+                    l.start_quiz(m, seed);
+                    let Nav::Quiz { order, choices, .. } = l.nav.clone() else {
+                        panic!()
+                    };
+                    for (k, &i) in order.iter().enumerate() {
+                        let at = choices[k].iter().position(|&c| c == items(m)[i].answer);
+                        right_at[i].insert(at.unwrap());
+                        let key = pos.min(choices[k].len() - 1);
+                        l.handle_key(KeyCode::Char((b'1' + key as u8) as char), &mut p, seed);
+                    }
+                    let Nav::QuizResult { score, .. } = &l.nav else {
+                        panic!("quiz did not finish")
+                    };
+                    passes += usize::from(score.passed);
+                }
+                assert!(
+                    passes < 20,
+                    "module {m} position {pos}: {passes}/200 passed"
+                );
+            }
+            assert!(right_at.iter().all(|s| s.len() > 1), "module {m}");
+        }
+    }
+
+    #[test]
+    fn lrn_20_b_retake_reshuffles_and_scores() {
+        let (mut l, mut p) = (learn(), Progress::default());
+        l.start_quiz(1, 1);
+        let Nav::Quiz { choices: first, .. } = l.nav.clone() else {
+            panic!()
+        };
+        take_quiz(&mut l, &mut p, 0);
+        assert!(matches!(&l.nav, Nav::QuizResult { score, .. } if score.percent == 100));
+        l.handle_key(KeyCode::Char('r'), &mut p, 2);
+        let Nav::Quiz {
+            choices: second, ..
+        } = l.nav.clone()
+        else {
+            panic!()
+        };
+        assert_ne!(first, second);
+        take_quiz(&mut l, &mut p, 3);
+        assert!(matches!(&l.nav, Nav::QuizResult { score, .. } if score.correct == 7));
     }
 
     #[test]

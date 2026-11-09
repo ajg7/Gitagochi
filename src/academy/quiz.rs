@@ -48,6 +48,18 @@ pub fn order(n: usize, prev: Option<&[usize]>, seed: u64) -> Vec<usize> {
     v
 }
 
+/// For each shown item, a fresh shuffle of its choices: position -> authored index.
+pub fn choice_orders(items: &[Item], order: &[usize], seed: u64) -> Vec<Vec<usize>> {
+    order
+        .iter()
+        .enumerate()
+        .map(|(k, &i)| {
+            let mix = (k as u64 + 1).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            self::order(items[i].choices.len(), None, seed ^ mix)
+        })
+        .collect()
+}
+
 /// A seed from the clock's nanoseconds.
 pub fn clock_seed() -> u64 {
     std::time::SystemTime::now()
