@@ -39,7 +39,7 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
 - [x] T012 Implement `git::export_head(root, dest, index_file) -> Result<String, GitError>` (returns the sha): `read-tree <sha>` and `--work-tree <dest> checkout-index -a -f`, both with `.env("GIT_INDEX_FILE", index_file)`. No commits gives an error the grader maps to `NoCommits` — files: `src/git.rs` — serves: LRN-15, LRN-26
 
 ## Phase 2: Module 1 and grading
-- [ ] T013 Module 1 "Cargo and tooling" — files: `src/academy/content/m01.rs`, `curriculum/hidden/m01.rs`, `curriculum/solutions/step01/`, `src/academy/curriculum.rs` (`MODULES`) — serves: LRN-01, LRN-02, LRN-03, LRN-04, LRN-05, LRN-06, LRN-07, LRN-08, LRN-18. Contents:
+- [x] T013 Module 1 "Cargo and tooling" — files: `src/academy/content/m01.rs`, `curriculum/hidden/m01.rs`, `curriculum/solutions/step01/`, `src/academy/curriculum.rs` (`MODULES`) — serves: LRN-01, LRN-02, LRN-03, LRN-04, LRN-05, LRN-06, LRN-07, LRN-08, LRN-18. Contents:
   - objectives 1.1-1.3, a lesson section per objective, Rust Book `read_more`;
   - a brief (lib+bin crate `tracker`, the log format, `git log --format=%h|%ae|%ct|%s --output=log.txt`, commit to grade);
   - 10 quiz items (≥ 2 spot-the-bug);
