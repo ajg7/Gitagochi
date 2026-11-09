@@ -31,6 +31,8 @@ Each round worked like this:
 
 The loop was capped at three rounds. If it still ended in `REVISE` after the cap, the orchestrator would stop and escalate to me. The review, adversary and verdict files from each round are kept in `docs/review/`.
 
+New work is spec-driven. `docs/constitution.md` holds the rules every feature follows. Each feature gets a folder in `docs/specs/` with a `spec.md` (requirements with IDs and acceptance criteria, which I approve), then a `plan.md` and `tasks.md` from the planner, then the loop above, with its review files in the same folder. See `docs/specs/README.md`.
+
 ## Usage
 
 ```

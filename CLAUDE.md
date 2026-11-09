@@ -8,7 +8,7 @@ Gitagochi is a terminal-based Tamagotchi-like game whose pet "feeds" on git comm
 
 ## Status
 
-Round 1 implementation has landed (edition 2024). The requirements live in `docs/spec.md`; reviewers judge the code against it. Usage: `gitagochi [PATH ...] [--author EMAIL]` (paths may be repos or parent folders; else `repos.json` in the data dir); keys `q`/Esc/Ctrl-C quit, `r` refresh and re-scan. One shared pet is fed by all watched repos. A repo seen for the first time only baselines HEAD (existing history does not feed the pet); later commits by the author feed it.
+Features 001 (core pet) and 002 (multi-repo) are implemented (edition 2024). Development is spec-driven: rules for every feature are in `docs/constitution.md`, each feature's requirements are in `docs/specs/NNN-<feature>/spec.md` (IDs like `CORE-04`, `MR-07`), and the lifecycle is in `docs/specs/README.md`. Reviewers judge code against the spec. Usage: `gitagochi [PATH ...] [--author EMAIL]` (paths may be repos or parent folders; else `repos.json` in the data dir); keys `q`/Esc/Ctrl-C quit, `r` refresh and re-scan. One shared pet is fed by all watched repos. A repo seen for the first time only baselines HEAD (existing history does not feed the pet); later commits by the author feed it.
 
 ## Commands
 
@@ -27,19 +27,25 @@ cargo fmt                    # format (use `cargo fmt --check` in CI)
 
 ## Workflow: build and review loop
 
-Substantial work runs through five subagents defined in `.claude/agents/`: `coder`, `reviewer`, `adversary`, `gatekeeper`, and `tester`. The main session orchestrates; it does not write the code itself.
+Substantial work runs through six subagents defined in `.claude/agents/`: `planner`, `coder`, `reviewer`, `adversary`, `gatekeeper`, and `tester`. The main session orchestrates; it does not write the code itself. Below, `F` is the feature folder `docs/specs/NNN-<feature>/`, and every agent gets `F` and `docs/constitution.md`.
+
+Before the loop:
+1. Spec: use the `specify` skill with the user until `F/spec.md` says `Status: Approved`. Never start the planner on a Draft spec.
+2. `planner` writes `F/plan.md` and `F/tasks.md` and ends the plan's Analysis with `Result: READY` or `BLOCKED`. If BLOCKED, take its questions to the user and update the spec first. Set the spec to `Status: In progress`.
 
 Each round N (max 3):
-1. `coder` implements (round 1) or fixes the items in `docs/review/round-(N-1)-verdict.md`, then commits.
-2. `reviewer` reviews the diff and writes `docs/review/round-N-review.md`.
-3. `adversary` reviews that review and the code, and writes `docs/review/round-N-adversary.md`.
-4. `gatekeeper` runs the checks and writes `docs/review/round-N-verdict.md`, whose first line is `VERDICT: SATISFIED` or `VERDICT: REVISE`.
+1. `coder` works through `F/tasks.md` (round 1) or fixes the items in `F/review/round-(N-1)-verdict.md`, then commits.
+2. `reviewer` reviews the diff and writes `F/review/round-N-review.md`.
+3. `adversary` reviews that review and the code, and writes `F/review/round-N-adversary.md`.
+4. `gatekeeper` runs the checks and writes `F/review/round-N-verdict.md`, whose first line is `VERDICT: SATISFIED` or `VERDICT: REVISE`.
 
-After a `VERDICT: SATISFIED`, run `tester` once. It writes tests from `docs/spec.md` (not from the implementation), edits only test code, and writes `docs/review/tester-report.md`. If it reports BLOCKING bugs, treat them as the required items of a new round (back to `coder`, then the usual reviewer/adversary/gatekeeper, then `tester` again) while rounds remain under the cap; otherwise escalate to the user. Tester work does not get its own extra rounds beyond the cap of 3.
+After a `VERDICT: SATISFIED`, run `tester` once. It writes tests from the spec's acceptance criteria (not from the implementation), edits only test code, and writes `F/review/tester-report.md`. If it reports BLOCKING bugs, treat them as the required items of a new round (back to `coder`, then the usual reviewer/adversary/gatekeeper, then `tester` again) while rounds remain under the cap; otherwise escalate to the user. Tester work does not get its own extra rounds beyond the cap of 3.
 
 Definition of satisfied: the app builds and runs, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check` and `cargo test` pass, and the only remaining issues are minor and non-blocking.
 
-If the verdict is REVISE, start the next round with only the verdict's required items passed to the coder. If round 3 still ends in REVISE (`ESCALATE: yes`), stop and give the user the open blocking items instead of looping. Pass state between agents through the files in `docs/review/`, not through chat, and don't share the coder's reasoning with the reviewers.
+If the verdict is REVISE, start the next round with only the verdict's required items passed to the coder. If round 3 still ends in REVISE (`ESCALATE: yes`), stop and give the user the open blocking items instead of looping. Pass state between agents through the files in `F/`, not through chat, and don't share the coder's reasoning with the reviewers.
+
+Closing a feature: with the user's approval, add the verdict's "Proposed known limitations" to `F/spec.md`, then set `Status: Implemented`. If a later fix changes agreed behavior, update the spec in the same change. `docs/review/` holds the archived reviews of 001 and 002 from before this layout.
 
 ## Architecture
 
