@@ -1,5 +1,6 @@
 //! Persistence: one shared pet save plus legacy per-repo save migration.
 
+use crate::academy::progress::Progress;
 use crate::pet::{Pet, RepoTrack};
 use std::fs;
 use std::io;
@@ -157,15 +158,58 @@ fn backup(path: &Path) {
 
 /// Save atomically (write temp file, then rename).
 pub fn save(path: &Path, pet: &Pet) -> io::Result<()> {
+    let json = serde_json::to_string_pretty(pet).map_err(io::Error::other)?;
+    write_atomic(path, json.as_bytes())
+}
+
+/// Write `data` to a temp file next to `path`, then rename it into place.
+pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    let json = serde_json::to_string_pretty(pet).map_err(io::Error::other)?;
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    fs::write(&tmp, json)?;
+    fs::write(&tmp, data)?;
     fs::rename(&tmp, path)
+}
+
+/// The curriculum progress file.
+pub fn progress_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("progress.json")
+}
+
+/// Load progress for a curriculum of `modules` modules. Missing file gives the
+/// default; an unreadable or corrupt file is moved to `.bak`.
+pub fn load_progress(path: &Path, modules: usize) -> Progress {
+    let text = match fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Progress::default(),
+        Err(_) => {
+            backup(path);
+            return Progress::default();
+        }
+    };
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    let parsed = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .filter(serde_json::Value::is_object)
+        .and_then(|v| serde_json::from_value::<Progress>(v).ok());
+    match parsed {
+        Some(mut p) => {
+            p.sanitize(modules);
+            p
+        }
+        None => {
+            backup(path);
+            Progress::default()
+        }
+    }
+}
+
+pub fn save_progress(path: &Path, p: &Progress) -> io::Result<()> {
+    let json = serde_json::to_string_pretty(p).map_err(io::Error::other)?;
+    write_atomic(path, json.as_bytes())
 }
 
 #[cfg(test)]

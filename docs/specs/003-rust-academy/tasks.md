@@ -16,14 +16,14 @@ Design details (types, commands, the per-module API table) are in `plan.md`; fol
   - `lrn_08_a_every_objective_assessed`.
   - `lrn_18_each_quiz_has_both_kinds`: every quiz has at least one `MultipleChoice` and one `SpotTheBug` item, `answer < choices.len()`, and `choices.len() >= 2`.
   - `lrn_17_hidden_tests_match_checks`: every `Test(name)` has a `fn name(` in `hidden_tests` and the reverse; names are prefixed `mNN_` and unique; no `assert` in the hidden source.
-- [ ] T003 [P] Write failing tests for progress — files: `src/academy/progress.rs` (tests module), `tests/academy_progress.rs` — serves: LRN-11, LRN-14, LRN-22, LRN-23, LRN-24. Tests:
+- [x] T003 [P] Write failing tests for progress — files: `src/academy/progress.rs` (tests module), `tests/academy_progress.rs` — serves: LRN-11, LRN-14, LRN-22, LRN-23, LRN-24. Tests:
   - `lrn_11_open_rule`;
   - `lrn_14_a_both_parts_needed`;
   - `lrn_22_a_failed_retake_keeps_pass`;
   - `lrn_23_a_restart_restores_progress`: save, load, module 1 passed, module 2 open, project path remembered;
   - `lrn_24_a_corrupt_progress_backed_up`: invalid JSON leaves a `.bak` and module 1 open; also covers the missing-file case;
   - a sanitize test: unknown module keys dropped, `quiz_best` clamped to 100.
-- [ ] T004 Implement `Progress`/`ModuleProgress` (`passed`, `open`, `record_quiz`, `record_project_pass`, `badges`, `sanitize`). In `store.rs`, factor `write_atomic` out of `save` (same behavior) and add `progress_path`, `load_progress` and `save_progress` using `backup()` — files: `src/academy/progress.rs`, `src/store.rs` — serves: LRN-11, LRN-14, LRN-22, LRN-23, LRN-24
+- [x] T004 Implement `Progress`/`ModuleProgress` (`passed`, `open`, `record_quiz`, `record_project_pass`, `badges`, `sanitize`). In `store.rs`, factor `write_atomic` out of `save` (same behavior) and add `progress_path`, `load_progress` and `save_progress` using `backup()` — files: `src/academy/progress.rs`, `src/store.rs` — serves: LRN-11, LRN-14, LRN-22, LRN-23, LRN-24
 - [ ] T005 [P] Write failing tests for the quiz — files: `src/academy/quiz.rs` (tests module) — serves: LRN-18, LRN-20. Tests:
   - `lrn_18_a_eight_of_ten_passes_seven_fails`;
   - `lrn_20_a_retake_order_differs`: across 1000 seeds `order(n, Some(prev), seed) != prev` for n ≥ 2, and the result is always a permutation;
