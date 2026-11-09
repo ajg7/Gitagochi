@@ -137,6 +137,12 @@ A guard adds a condition to an arm:
     };
     // `a` and `b` are &str from here on
 
+To split a line into a fixed number of fields, `splitn(n, '|')` stops after
+n pieces, so the last piece keeps any further `|`:
+
+    let mut parts = "a|b|c|d|e".splitn(4, '|');
+    // pieces: "a", "b", "c", "d|e"
+
 Inside a function that returns an Option, `?` after an Option is shorthand
 for "take the value out of Some, or return None right now". Clippy
 (clippy::question_mark) asks for it instead of a let-else that only returns

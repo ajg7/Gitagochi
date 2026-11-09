@@ -61,7 +61,25 @@ The everyday commands, run in the package folder:
 `rustc --explain E0308` describes it.
 
 The target/ folder holds build output and should not be committed; put
-`/target` in .gitignore."#,
+`/target` in .gitignore.
+
+A first library function. `for` walks an iterator; `log.lines()` gives each
+line of a &str, and `line.trim()` drops the spaces around a line, so
+`line.trim().is_empty()` is true for a blank line. `let mut` declares a
+variable you can change:
+
+    pub fn count_blank(text: &str) -> usize {
+        let mut count = 0;
+        for line in text.lines() {
+            if line.trim().is_empty() {
+                count += 1;
+            }
+        }
+        count
+    }
+
+The last expression (`count`, no semicolon) is the function's result, and
+`!` negates a bool (`!line.is_empty()`)."#,
         },
         Section {
             title: "Unit tests",

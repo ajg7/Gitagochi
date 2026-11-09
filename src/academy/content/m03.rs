@@ -81,6 +81,10 @@ may use the value; and a reference may not outlive the value it points to.
     v.push(2);              // error[E0502]: cannot borrow `v` as mutable
     println!("{first}");    //   because it is also borrowed as immutable
 
+A borrow lasts until its last use, not until the end of the block: move the
+println! above the push and the code compiles, because `first` is no longer
+used when push borrows `v` mutably.
+
 Prefer slice parameters: take &[T] rather than &Vec<T>, and &mut [T] rather
 than &mut Vec<T> when you only change elements; clippy::ptr_arg flags the Vec
 forms. A &Vec<T> or &mut Vec<T> argument is accepted where a slice is expected.
