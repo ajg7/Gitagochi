@@ -50,6 +50,16 @@ PATHs on the command line override the config's `repos`, and `--author` override
 
 All watched repos feed one shared pet, saved in `pet.json` in the data dir. A repo seen for the first time only records its current HEAD, so existing history does not feed the pet. Missing or non-repo paths show a one-line warning and the rest keep feeding; it is an error only if no repo can be found. An old single-repo save is adopted as the shared pet on first run.
 
-Keys: `q`, `Esc` or `Ctrl-C` quits, and `r` refreshes (and re-scans).
+Keys: `q`, `Esc` or `Ctrl-C` quits, `r` refreshes (and re-scans), and `l` opens the Rust academy.
+
+## Rust academy
+
+Press `l` on the pet screen for a built-in, offline Rust course for programmers who know another language and git. Its ten modules (cargo and tooling, types and control flow, ownership, structs and enums, error handling, collections and iterators, traits and generics, modules and testing, lifetimes, idiomatic Rust) each have objectives, a lesson, a project step and an assessment. The steps together build `tracker`, a command-line commit tracker that ends with a tiny pet of your own.
+
+- Learn-screen keys: Up/Down select or scroll, Enter opens, Esc goes back (from the module list to the pet screen), `p` sets up the project, `1`-`4` or `a`-`d` answer a quiz item, `r` retakes a quiz or reruns a check, `q` quits (except while typing a path), and Ctrl-C always quits. The pet keeps living while the learn screen is open.
+- Project setup (`p`): type a new or empty folder. The app writes a starter cargo project there, runs `git init`, and watches it on every run (on top of the PATHs or `repos.json`), so your commits there feed the pet. A non-empty folder is refused and left unchanged.
+- A module is passed when its quiz scores 80% or more and its project check passes. The check grades your last commit (not uncommitted edits) with hidden tests plus `cargo fmt --check` and `cargo clippy -D warnings`, and includes every earlier module's checks. Failures name the check, show the compiler, test or lint message, and point to the lesson section to revisit. Later modules stay locked until the one before is passed. Passed modules show as badges on the pet screen and can be reread and retaken for practice.
+- Grading needs the Rust toolchain on PATH: cargo, rustfmt and clippy from https://rustup.rs, Rust 1.85 or newer for edition 2024. Lessons and quizzes work without it.
+- Progress (passed modules, best quiz scores, project folder) is saved in `progress.json` in the data dir; a corrupt file is moved to `progress.json.bak`. Grading build output is kept in `academy/` in the data dir. Set the environment variable `GITAGOCHI_DATA_DIR` to a non-empty path to use that folder as the data dir instead of the platform default (for tests and portable use).
 
 ![1791865173630](image/README/1791865173630.png)

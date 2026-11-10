@@ -1,6 +1,8 @@
 //! Gitagochi: a terminal pet that feeds on git commits.
 
+pub mod academy;
 pub mod git;
+pub mod learn;
 pub mod pet;
 pub mod repos;
 pub mod store;
@@ -130,6 +132,36 @@ pub fn effective_paths(cli: Vec<PathBuf>, config: &repos::Config) -> Vec<PathBuf
     }
 }
 
+/// Watched paths plus the academy project folder, if one is set up.
+pub fn watched_paths(
+    mut paths: Vec<PathBuf>,
+    progress: &academy::progress::Progress,
+) -> Vec<PathBuf> {
+    if let Some(p) = &progress.project
+        && !paths.contains(p)
+    {
+        paths.push(p.clone());
+    }
+    paths
+}
+
+/// With explicit paths, finding no repo is an error; with none given, the app opens anyway.
+fn check_resolved(
+    explicit: bool,
+    resolved: &repos::Resolved,
+    config_warning: Option<&str>,
+) -> Result<(), String> {
+    if !resolved.repos.is_empty() || !explicit {
+        return Ok(());
+    }
+    let mut msgs = resolved.warnings.clone();
+    msgs.extend(config_warning.map(String::from));
+    if msgs.is_empty() {
+        msgs.push("no git repositories found".into());
+    }
+    Err(msgs.join("\n"))
+}
+
 /// Entry point used by `main`. Errors are user-facing messages.
 pub fn run(args: Args) -> Result<(), String> {
     let data_dir = store::default_data_dir();
@@ -140,23 +172,18 @@ pub fn run(args: Args) -> Result<(), String> {
     {
         return Err(format!("{}: {w}", config_file.display()));
     }
+    let explicit = !args.paths.is_empty();
     let author_arg = args.author.or_else(|| config.author.clone());
-    let paths = effective_paths(args.paths, &config);
+    let progress_file = store::progress_path(&data_dir);
+    let progress = store::load_progress(&progress_file, academy::curriculum::MODULES.len());
+    let paths = watched_paths(effective_paths(args.paths, &config), &progress);
     let resolved = repos::resolve(&paths);
-    if resolved.repos.is_empty() {
-        let mut msgs = resolved.warnings;
-        msgs.extend(config_warning);
-        if msgs.is_empty() {
-            msgs.push("no git repositories found".into());
-        }
-        return Err(msgs.join(
-            "
-",
-        ));
-    }
-    let author = author_arg
-        .or_else(|| resolved.repos.iter().find_map(Repo::default_author))
-        .ok_or_else(|| GitError::NoAuthor.to_string())?;
+    check_resolved(explicit, &resolved, config_warning.as_deref())?;
+    let author = match author_arg.or_else(|| resolved.repos.iter().find_map(Repo::default_author)) {
+        Some(a) => a,
+        None if resolved.repos.is_empty() => String::new(),
+        None => return Err(GitError::NoAuthor.to_string()),
+    };
     let save_file = store::shared_path(&data_dir);
     let now = now_unix();
     let keys: Vec<String> = resolved.repos.iter().map(|r| r.key().to_string()).collect();
@@ -169,6 +196,12 @@ pub fn run(args: Args) -> Result<(), String> {
         author,
         save_file,
         initial_warning: config_warning,
+        progress,
+        progress_file,
+        grade_env: academy::grade::GradeEnv::new(&data_dir),
+        default_project: dirs::home_dir()
+            .unwrap_or_default()
+            .join("gitagochi-tracker"),
     };
     ui::run(session, resolved, pet).map_err(|e| format!("terminal error: {e}"))
 }
@@ -176,6 +209,15 @@ pub fn run(args: Args) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lrn_29_no_paths_opens_but_explicit_plain_folder_errors() {
+        let d = tempfile::tempdir().unwrap();
+        let none = repos::resolve(&[d.path().to_path_buf()]);
+        assert!(none.repos.is_empty());
+        assert!(check_resolved(false, &none, None).is_ok());
+        assert!(check_resolved(true, &none, None).is_err());
+    }
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
