@@ -1,4 +1,4 @@
-# Tester report: 003 Rust academy (spec v1.2, after round-4 SATISFIED)
+# Tester report: 003 Rust academy (spec v1.3, after round-4 SATISFIED and T036)
 
 Result: no BLOCKING bugs found. Gates: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` (see the end of this file for the final run).
 
@@ -41,13 +41,14 @@ New tests: `tests/academy_spec.rs` (new), `tests/academy_grade.rs` (added `lrn_2
 | LRN-28.a | academy_grade `lrn_28_a_fake_test_output_does_not_pass` | pass |
 | LRN-28.b | academy_grade `lrn_28_b_early_exit_zero_does_not_pass`, `lrn_28_c_earlier_pass_does_not_carry_over` (stale pass from a previous run) | pass |
 | LRN-28 hardening gap | academy_spec `lrn_28_hidden_tests_are_instrumentable` (each hidden test appears exactly once as `fn name() {`) | pass |
-| LRN-29.a | academy_spec `lrn_29_a_...` (public pieces only: default path is `.`, plain folder resolves to no repo); unit tests in `src/lib.rs` and `src/ui.rs` cover the notice | partial, see untestable |
-| LRN-29.b | unit test `lrn_29_no_paths_opens_but_explicit_plain_folder_errors` in `src/lib.rs` (private `check_resolved`) | partial, see untestable |
+| LRN-29.a | academy_e2e `lrn_29_a_no_paths_no_repo_opens_with_notice` (real binary, temp cwd and GITAGOCHI_DATA_DIR: stays alive 2s, screen output contains "no repos watched yet") | pass; pressing `l` is manual (no tty to send keys), covered at unit level |
+| LRN-29.b | academy_e2e `lrn_29_b_explicit_plain_folder_exits_1`; unit test in `src/lib.rs` | pass |
+| LRN-30.a | academy_e2e `lrn_30_a_files_land_under_data_dir_only` (pet.json under the data dir; platform data dir file list and mtimes unchanged; cwd untouched) | pass; only the files written in a 2s run are observed (progress.json, academy/ appear only on learn actions, manual) |
 
 Standing cases (already covered by earlier features' tests, rechecked by name): non-git dir (`git_edge::non_git_directory_gives_clear_error`), no commits (`empty_repo_syncs_without_error_and_feeds_nothing`), very large history (`very_large_history_only_new_commits_are_walked`), corrupt save (`persistence::corrupt_variants_start_fresh_and_keep_bak`), clock backwards (`clock_going_backwards_does_not_panic_or_decay`), decay across restarts (`decay_continues_across_restart`), only the configured author feeds (`only_configured_author_feeds_and_case_is_ignored`). Academy edge cases: corrupt/missing progress, uncommitted edits, non-empty folder, later step breaking earlier feature, mis-tagged items are all in the table above. Windows paths with spaces: grade fixtures use `my project` and `data dir`.
 
 ## Untestable without a seam (report, not added)
-- LRN-29.a / LRN-29.b end to end (run the binary with no repos / a plain folder). `store::default_data_dir()` uses `dirs::data_dir()` with no override, and on Windows that ignores env vars, so a spawned binary would read and could modify (`.bak` move) the real user data dir and would pick up the user's real academy project. A seam such as a `GITAGOCHI_DATA_DIR` env var is needed. Without a tty, the TUI side (notice shown, `l` opens learn screen) also cannot be driven; the notice text and key handling are covered at unit level.
+- Resolved by LRN-30 (T036): LRN-29.a/b and LRN-30.a now run the real binary in `tests/academy_e2e.rs`. Remaining manual: press `l` on the no-repo start and see the learn screen (crossterm reads the console/tty, not piped stdin).
 - LRN-09.a "the pet keeps updating while the learn screen is open": lives in the `ui::run` event loop; no seam.
 - LRN-28 "non-zero exit with a marker present" (adversary M4): no deterministic black-box way to get a marker written and then a non-zero exit from learner code, because the marker path and nonce are not known to learner code except via the known limitation. Not tested.
 - Manual TUI check on Windows (plan.md Verification) not performed by the tester.
@@ -57,7 +58,7 @@ None blocking. All tests pass against the shipped code.
 
 ## Spec ambiguities
 - LRN-20.b: "no such strategy reaches the pass mark with certainty" is tested probabilistically (60 seeds per position per module). Quizzes with few choices (2 or 3) give a fixed-position strategy a high per-attempt pass chance only if the quiz is very short; consider stating a minimum quiz size.
-- LRN-29.a asks for an end-to-end start; it needs a data-dir seam (see above).
+- LRN-29.a: none now; the seam exists.
 - LRN-28: whether a learner reading the grader's files is in scope (verdict G1). The proposed known limitation in the round-4 verdict covers it.
 
-Final run: fmt clean, clippy clean, cargo test all suites pass.
+Final run (after adding academy_e2e): fmt clean, clippy clean, cargo test all suites pass.
