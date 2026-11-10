@@ -331,6 +331,8 @@ fn refresh(pet: &mut Pet, repos: &[Repo], author: &str, warnings: &[String], mes
     }
     if let Some(e) = report.errors.first() {
         parts.push(short_error(e));
+    } else if repos.is_empty() {
+        parts.push("no repos watched yet - press l for the Rust academy".into());
     } else if let Some(w) = warnings.first() {
         parts.push(short_error(w).replacen("sync error", "warning", 1));
     }
@@ -342,6 +344,14 @@ mod tests {
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+
+    #[test]
+    fn lrn_29_notice_when_no_repos() {
+        let mut pet = Pet::new(1000);
+        let mut msg = String::new();
+        refresh(&mut pet, &[], "", &[], &mut msg);
+        assert!(msg.contains("no repos watched yet"), "{msg}");
+    }
 
     #[test]
     fn lrn_21_a_badge_shown_pet_unchanged() {

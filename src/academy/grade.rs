@@ -304,29 +304,32 @@ impl Grader<'_> {
         let Some(exe) = exe else {
             return Ok(all("the hidden test program was not produced".into()));
         };
-        let mut c = command(&exe.to_string_lossy());
-        c.args(["--test-threads=1", "--color", "never"])
-            .current_dir(&self.dest)
-            .env("RUST_BACKTRACE", "0");
         let tt = self.env.test_timeout;
-        let out = self.run(c, tt)?;
-        let text = String::from_utf8_lossy(&out.stdout).into_owned();
-        let timed_out = out.exit == Exit::TimedOut;
-        Ok(names
-            .iter()
-            .map(|n| {
-                let res = if text.lines().any(|l| l == format!("test {n} ... ok")) {
-                    Ok(())
-                } else if let Some(f) = failure_text(&text, n) {
-                    Err(f)
-                } else if timed_out {
-                    Err(self.timed_out(tt))
-                } else {
-                    Err("the test did not report a result".into())
-                };
-                (n.to_string(), res)
-            })
-            .collect())
+        let start = std::time::Instant::now();
+        let mut res = Vec::new();
+        for n in names {
+            let left = tt.saturating_sub(start.elapsed());
+            if left.is_zero() {
+                res.push((n.to_string(), Err(self.timed_out(tt))));
+                continue;
+            }
+            let mut c = command(&exe.to_string_lossy());
+            c.args(["--exact", n, "--test-threads=1", "--color", "never"])
+                .current_dir(&self.dest)
+                .env("RUST_BACKTRACE", "0");
+            let out = self.run(c, left)?;
+            let text = String::from_utf8_lossy(&out.stdout).into_owned();
+            let r = if out.exit == Exit::TimedOut {
+                Err(self.timed_out(tt))
+            } else if out.success() {
+                Ok(())
+            } else {
+                Err(failure_text(&text, n)
+                    .unwrap_or_else(|| "the test did not report a result".into()))
+            };
+            res.push((n.to_string(), r));
+        }
+        Ok(res.into_iter().collect())
     }
 }
 

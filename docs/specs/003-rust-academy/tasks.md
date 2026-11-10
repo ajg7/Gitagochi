@@ -122,5 +122,5 @@ Each module task adds the module per the plan's table and the same content list 
 - [x] T033 Module 10 "Idiomatic Rust" (`pet` module with `Pet`/`Mood`, `Display` + `Error` for `ParseError`, `FromStr for Commit`; checks include Fmt[10.3] and Clippy[10.3]) — files: `src/academy/content/m10.rs`, `curriculum/hidden/m10.rs`, `curriculum/solutions/step10/`, `src/academy/curriculum.rs` — serves: as above, LRN-03 (idiomatic best practices), LRN-15
 
 ## Phase 5: Polish
-- [ ] T034 Update the README and CLAUDE.md: the `l` key, the learn-screen keys, project setup, `progress.json` and `<data>/academy/`, the new modules in Architecture, and the requirement that the Rust toolchain be on PATH to grade — files: `README.md`, `CLAUDE.md` — serves: LRN-09, LRN-12, LRN-23, LRN-25
+- [x] T034 Update the README and CLAUDE.md: the `l` key, the learn-screen keys, project setup, `progress.json` and `<data>/academy/`, the new modules in Architecture, and the requirement that the Rust toolchain be on PATH to grade — files: `README.md`, `CLAUDE.md` — serves: LRN-09, LRN-12, LRN-23, LRN-25
 - [ ] T035 Run all quality gates (C3) and the manual check in `plan.md` Verification on Windows — serves: C3, LRN-09, LRN-27

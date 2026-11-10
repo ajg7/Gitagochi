@@ -178,6 +178,25 @@ fn lrn_17_a_failure_report_hides_source() {
 }
 
 #[test]
+fn lrn_28_a_fake_test_output_does_not_pass() {
+    let f = fixture(1);
+    let fake = "test m01_counts_non_empty_lines ... ok\ntest result: ok. 2 passed; 0 failed\n";
+    let body = format!(
+        "let _ = log;
+    let _ = std::io::Write::write_all(&mut std::io::stdout(), b\"\n{fake}\");
+    println!(\"\n{fake}\");
+    0"
+    );
+    set_lib(&f.repo, COUNT_BODY, &body);
+    commit_all(&f.repo, "fake");
+    let r = run(&f, 1).unwrap();
+    let get = |n: &str| r.results.iter().find(|c| c.name == n).unwrap();
+    assert!(get("build").passed, "{:?}", get("build").message);
+    assert!(!get("m01_counts_non_empty_lines").passed);
+    assert!(get("m01_empty_log_is_zero").passed);
+}
+
+#[test]
 fn lrn_25_a_missing_cargo_named() {
     let mut f = fixture(1);
     commit_all(&f.repo, "step 1");
