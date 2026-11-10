@@ -123,4 +123,5 @@ Each module task adds the module per the plan's table and the same content list 
 
 ## Phase 5: Polish
 - [x] T034 Update the README and CLAUDE.md: the `l` key, the learn-screen keys, project setup, `progress.json` and `<data>/academy/`, the new modules in Architecture, and the requirement that the Rust toolchain be on PATH to grade — files: `README.md`, `CLAUDE.md` — serves: LRN-09, LRN-12, LRN-23, LRN-25
+- [x] T036 `store::default_data_dir()` honours a non-empty `GITAGOCHI_DATA_DIR`; unit test `lrn_30_data_dir_override`; documented in README and CLAUDE.md — files: `src/store.rs`, `README.md`, `CLAUDE.md` — serves: LRN-30, LRN-30.a
 - [ ] T035 Run all quality gates (C3) and the manual check in `plan.md` Verification on Windows — serves: C3, LRN-09, LRN-27

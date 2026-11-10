@@ -18,6 +18,13 @@ fn fnv1a(s: &str) -> u64 {
 
 /// Directory holding all save files.
 pub fn default_data_dir() -> PathBuf {
+    data_dir_from(std::env::var_os("GITAGOCHI_DATA_DIR"))
+}
+
+fn data_dir_from(over: Option<std::ffi::OsString>) -> PathBuf {
+    if let Some(p) = over.filter(|p| !p.is_empty()) {
+        return PathBuf::from(p);
+    }
     dirs::data_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("gitagochi")
@@ -216,6 +223,15 @@ pub fn save_progress(path: &Path, p: &Progress) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::pet::FedCommit;
+
+    #[test]
+    fn lrn_30_data_dir_override() {
+        let over = Some("/tmp/x".into());
+        assert_eq!(data_dir_from(over), PathBuf::from("/tmp/x"));
+        let default = data_dir_from(None);
+        assert!(default.ends_with("gitagochi"));
+        assert_eq!(data_dir_from(Some("".into())), default);
+    }
 
     #[test]
     fn round_trip() {

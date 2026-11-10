@@ -1,7 +1,7 @@
 # 003 Rust academy
 
 Status: In progress
-Version: 1.2
+Version: 1.3
 Depends on: 001, 002 (the learner's project is a watched repo; its commits feed the pet under CORE-01/MR-11, unchanged); LRN-29 narrows MR-09
 Requirement prefix: LRN
 
@@ -58,6 +58,7 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-27** If the project does not build or a check runs too long, then the app shall fail that check with the build output or a timeout message and stay responsive.
 - **LRN-28** The project part's result shall depend only on whether the checks really passed; nothing the learner's code does (printing fake results, exiting early) shall make a check pass.
 - **LRN-29** If no paths are given and no repo can be resolved (no config, and the current directory is not or holds no repo), then the app shall open with a "no repos watched yet" notice instead of exiting, so the learn screen and project setup are reachable. Explicit paths that resolve to no repo still exit 1 (CORE-20, MR-09).
+- **LRN-30** If the environment variable `GITAGOCHI_DATA_DIR` is set to a non-empty path, the app shall use it as the data dir instead of the platform default (for tests and portable use); when unset, behavior is unchanged.
 
 ## Acceptance criteria
 - **LRN-01.a** Given no network, when the learner opens the learn screen, then all modules are listed in order.
@@ -94,6 +95,7 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - **LRN-28.b** Given a committed project whose code calls `std::process::exit(0)` inside the function under test, when checked, then that check fails.
 - **LRN-29.a** Given no `repos.json` and a current directory that holds no repo, when the app starts with no paths, then it opens, shows the notice, and `l` opens the learn screen.
 - **LRN-29.b** Given an explicit path that is a plain folder, when the app runs on it, then it still exits 1.
+- **LRN-30.a** Given `GITAGOCHI_DATA_DIR` set to a temporary folder, when the app runs, then every file it writes (`pet.json`, `repos.json`, `progress.json`, `academy/`) is under that folder and none in the platform data dir.
 
 ## Edge cases
 - Progress file missing / corrupt → LRN-24
@@ -135,7 +137,8 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - 2026-11-08: Q (round 1 gap S3): must grading resist fake test output printed by learner code? A: yes → LRN-28
 
 ## Known limitations
-- A determined learner can still cheat by inspecting the compiled hidden test program (LRN-28); grading resists accidents and casual tricks, not a motivated attacker.
+- Grading (LRN-28) resists accidents and casual tricks, not a motivated learner: the pass marker and its nonce can be found by reading the instrumented test source, by listing the marks folder (earlier markers persist until the run ends), or by inspecting the compiled test program. The nonce comes from the process id and the clock.
+- The LRN-29 notice wording is chosen by the implementation, and a repo added after start is picked up by re-scan but the author stays empty until restart.
 
 ## Changelog
 - 0.1 (2026-11-08): first draft.
@@ -143,3 +146,4 @@ Gitagochi users write code and commit, and many want to learn Rust itself. A bui
 - 1.0 (2026-11-08): approved by the owner.
 - 1.1 (2026-11-08): owner decisions on round 1 spec gaps: shuffled choices (LRN-20), LRN-28, LRN-29.
 - 1.2 (2026-11-09): LRN-28 covers early exits too; added LRN-28.b and a known limitation (owner approved round 4).
+- 1.3 (2026-11-09): LRN-30 (`GITAGOCHI_DATA_DIR`) and LRN-30.a so LRN-29 can be tested end to end; known limitations widened (owner approved).
