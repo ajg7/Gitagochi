@@ -357,3 +357,25 @@ fn lrn_16_a_module_3_names_broken_module_1_check() {
         "{bad:#?}"
     );
 }
+
+#[test]
+fn lrn_28_c_earlier_pass_does_not_carry_over() {
+    let f = fixture(1);
+    commit_all(&f.repo, "step 1");
+    let r = run(&f, 1).unwrap();
+    assert!(r.passed(), "{:?}", r.results);
+    set_lib(
+        &f.repo,
+        COUNT_BODY,
+        "let _ = log;
+    0",
+    );
+    commit_all(&f.repo, "now wrong");
+    let r = run(&f, 1).unwrap();
+    assert!(!r.passed());
+    assert!(
+        failing(&r).contains(&"m01_counts_non_empty_lines"),
+        "{:?}",
+        failing(&r)
+    );
+}
