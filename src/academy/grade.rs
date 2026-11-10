@@ -181,9 +181,41 @@ struct Grader<'a> {
     env: &'a GradeEnv,
     dest: PathBuf,
     cancel: &'a AtomicBool,
+    nonce: String,
 }
 
 impl Grader<'_> {
+    fn marks(&self) -> PathBuf {
+        self.dest.with_file_name("marks")
+    }
+
+    fn marker(&self, name: &str) -> PathBuf {
+        self.marks().join(format!("{}_{name}", self.nonce))
+    }
+
+    /// Make each named test write its marker file when it returns without panicking.
+    fn instrument(&self, src: &str, names: &[&str]) -> String {
+        let mut s = src.to_string();
+        for n in names {
+            let head = format!("fn {n}() {{");
+            let guard = format!("{head} let _done = AcademyDone({:?});", self.marker(n));
+            s = s.replacen(&head, &guard, 1);
+        }
+        s.push_str(
+            "
+struct AcademyDone(&'static str);
+impl Drop for AcademyDone {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            let _ = std::fs::write(self.0, \"\");
+        }
+    }
+}
+",
+        );
+        s
+    }
+
     fn cargo(&self, args: &[&str]) -> Command {
         let mut c = command(&self.env.cargo);
         c.args(args)
@@ -313,6 +345,7 @@ impl Grader<'_> {
                 res.push((n.to_string(), Err(self.timed_out(tt))));
                 continue;
             }
+            let _ = fs::remove_file(self.marker(n));
             let mut c = command(&exe.to_string_lossy());
             c.args(["--exact", n, "--test-threads=1", "--color", "never"])
                 .current_dir(&self.dest)
@@ -321,7 +354,7 @@ impl Grader<'_> {
             let text = String::from_utf8_lossy(&out.stdout).into_owned();
             let r = if out.exit == Exit::TimedOut {
                 Err(self.timed_out(tt))
-            } else if out.success() {
+            } else if out.success() && self.marker(n).is_file() {
                 Ok(())
             } else {
                 Err(failure_text(&text, n)
@@ -429,7 +462,19 @@ fn grade_in(
     if !dest.join("Cargo.toml").is_file() {
         return Err(GradeError::NotCommitted);
     }
-    let g = Grader { env, dest, cancel };
+    let nonce = format!(
+        "{:x}{:x}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos())
+    );
+    let g = Grader {
+        env,
+        dest,
+        cancel,
+        nonce,
+    };
     let mut outcomes: HashMap<String, Outcome> = HashMap::new();
     let mut built = true;
     for (_, c) in checks {
@@ -455,11 +500,13 @@ fn grade_in(
     }
     let tests_dir = g.dest.join("tests");
     fs::create_dir_all(&tests_dir).map_err(io_err)?;
-    for (m, _) in &by_module {
+    fs::create_dir_all(g.marks()).map_err(io_err)?;
+    for (m, names) in &by_module {
         let src = modules
             .get(usize::from(*m) - 1)
             .map(|x| x.hidden_tests)
             .unwrap_or_default();
+        let src = g.instrument(src, names);
         fs::write(tests_dir.join(format!("academy_m{m:02}.rs")), src).map_err(io_err)?;
     }
     for (m, names) in &by_module {

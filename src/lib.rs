@@ -159,10 +159,7 @@ fn check_resolved(
     if msgs.is_empty() {
         msgs.push("no git repositories found".into());
     }
-    Err(msgs.join(
-        "
-",
-    ))
+    Err(msgs.join("\n"))
 }
 
 /// Entry point used by `main`. Errors are user-facing messages.

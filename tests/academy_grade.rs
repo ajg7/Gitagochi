@@ -197,6 +197,23 @@ fn lrn_28_a_fake_test_output_does_not_pass() {
 }
 
 #[test]
+fn lrn_28_b_early_exit_zero_does_not_pass() {
+    let f = fixture(1);
+    set_lib(
+        &f.repo,
+        COUNT_BODY,
+        "let _ = log;
+    std::process::exit(0)",
+    );
+    commit_all(&f.repo, "exit");
+    let r = run(&f, 1).unwrap();
+    let get = |n: &str| r.results.iter().find(|c| c.name == n).unwrap();
+    assert!(get("build").passed, "{:?}", get("build").message);
+    assert!(!get("m01_counts_non_empty_lines").passed);
+    assert!(!get("m01_empty_log_is_zero").passed);
+}
+
+#[test]
 fn lrn_25_a_missing_cargo_named() {
     let mut f = fixture(1);
     commit_all(&f.repo, "step 1");
